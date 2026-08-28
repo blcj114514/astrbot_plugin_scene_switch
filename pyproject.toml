@@ -1,6 +1,6 @@
 [project]
 name = "astrbot-plugin-scene-switch"
-version = "1.15.0"
+version = "1.15.1"
 description = "AstrBot plugin that switches LLM providers and personas by conversation scene or user request"
 readme = "README.md"
 requires-python = ">=3.12"

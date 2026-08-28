@@ -152,8 +152,17 @@ import main as plugin_main  # noqa: E402
 
 
 class FakeContext:
+    def __init__(self) -> None:
+        self.providers: list = []
+
     def get_all_providers(self):
-        return []
+        return self.providers
+
+    def get_provider_by_id(self, provider_id: str):
+        return None
+
+    def get_using_provider(self, umo: str | None = None):
+        return self.providers[0] if self.providers else None
 
 
 class FakeEvent:
@@ -340,5 +349,46 @@ def test_llm_request_hook_stops_when_silenced():
     async def _run():
         await plugin.on_llm_request(event, req)
         assert event.stopped
+
+    asyncio.run(_run())
+
+
+def test_llm_request_hook_applies_session_think_to_provider_extra_body():
+    plugin = _plugin("think-pass")
+    provider = SimpleNamespace()
+
+    def _orig_apply(payloads, extra_body):
+        extra_body["reasoning_effort"] = "none"
+
+    provider._apply_provider_specific_request_overrides = _orig_apply
+    plugin.context.providers.append(provider)
+
+    event = FakeEvent("继续", umo="g:think")
+    key = plugin_main.SessionStore.make_key(
+        event.unified_msg_origin, event.get_sender_id()
+    )
+    plugin.store.set_think(key, "max", 3600)
+    event.set_extra(
+        "scene_switch_decision",
+        {
+            "applied": False,
+            "source": "think",
+            "reasoning_effort": "max",
+            "provider_id": "chat-p",
+        },
+    )
+    req = ProviderRequest()
+    req.prompt = "hi"
+
+    async def _run():
+        await plugin.on_llm_request(event, req)
+        assert getattr(req, "reasoning_effort", None) == "max"
+        extra = {"reasoning_effort": "low"}
+        provider._apply_provider_specific_request_overrides({}, extra)
+        assert extra["reasoning_effort"] == "max"
+        await plugin.on_llm_response(event, None)
+        extra_after = {"reasoning_effort": "low"}
+        provider._apply_provider_specific_request_overrides({}, extra_after)
+        assert extra_after["reasoning_effort"] == "none"
 
     asyncio.run(_run())

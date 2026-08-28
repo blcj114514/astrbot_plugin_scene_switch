@@ -22,8 +22,9 @@ def build_feature_intro(
 ) -> str:
     think_cap = (
         "3. 思考强度：群里 @ 后发「开启思考 max」或「关闭思考」；"
-        "也可 /scene think max。插件只写 AstrBot 的 reasoning_effort，"
-        "不改各家 extra_body / 请求头。打开「覆盖思考强度」才会按场景档位注入。"
+        "也可 /scene think max。会把本轮 OpenAI 兼容请求的 extra_body."
+        "reasoning_effort 设为该档位，不写 Ollama 原生 think。"
+        "打开「覆盖思考强度」才会按场景档位注入。"
     )
     think_cmd = "/scene think max — 本会话思考强度（none/low/medium/high/max/auto）"
     lines = [

@@ -1,10 +1,16 @@
 from types import SimpleNamespace
 
 from scene_switch.think import (
+    agent_text_chat_payload,
+    clear_request_effort,
+    current_request_effort,
+    ensure_provider_effort_passthrough,
     inject_reasoning_effort,
     match_think,
     match_think_command,
     normalize_effort,
+    reset_request_effort,
+    set_request_effort,
 )
 
 
@@ -36,6 +42,99 @@ def test_inject_sets_reasoning_effort_only():
     assert req.reasoning_effort == "high"
     assert not hasattr(req, "extra_body")
     assert not hasattr(req, "think")
+
+
+def test_agent_runner_drops_request_reasoning_effort():
+    req = SimpleNamespace(
+        reasoning_effort="max",
+        session_id="s",
+        model="m",
+        contexts=[],
+        func_tool=None,
+        extra_user_content_parts=[],
+    )
+    inject_reasoning_effort(req, "max")
+    payload = agent_text_chat_payload(req)
+    assert payload["session_id"] == "s"
+    assert payload["model"] == "m"
+    assert "reasoning_effort" not in payload
+
+
+def _simulate_openai_non_stream(provider, payloads, custom_extra_body):
+    extra_body = {}
+    default_params = {"messages", "model", "tools", "tool_choice", "stream"}
+    payloads = dict(payloads)
+    to_del = [key for key in payloads if key not in default_params]
+    for key in to_del:
+        extra_body[key] = payloads.pop(key)
+    extra_body.update(custom_extra_body)
+    provider._apply_provider_specific_request_overrides(payloads, extra_body)
+    return extra_body
+
+
+class _FakeOpenAIProvider:
+    def __init__(self) -> None:
+        self.chat_kwargs = None
+        self.stream_kwargs = None
+
+    def _apply_provider_specific_request_overrides(self, payloads, extra_body):
+        extra_body.pop("think", None)
+        extra_body["reasoning_effort"] = "none"
+
+    async def _prepare_chat_payload(self, *args, **kwargs):
+        return {"messages": [], "model": "x"}, []
+
+    async def text_chat(self, **kwargs):
+        self.chat_kwargs = dict(kwargs)
+        return SimpleNamespace(completion_text="ok")
+
+    async def text_chat_stream(self, **kwargs):
+        self.stream_kwargs = dict(kwargs)
+        yield SimpleNamespace(completion_text="chunk")
+
+
+def test_passthrough_wins_over_provider_extra_body_and_disable_thinking():
+    provider = _FakeOpenAIProvider()
+    ensure_provider_effort_passthrough(provider)
+    effort_cv = set_request_effort("max")
+    try:
+        extra = _simulate_openai_non_stream(
+            provider,
+            {"messages": [], "model": "x", "reasoning_effort": "high"},
+            {"reasoning_effort": "low", "think": False},
+        )
+        assert extra["reasoning_effort"] == "max"
+        assert "think" not in extra
+    finally:
+        reset_request_effort(effort_cv)
+        clear_request_effort()
+
+
+def test_prepare_and_text_chat_receive_effort():
+    import asyncio
+
+    provider = _FakeOpenAIProvider()
+    ensure_provider_effort_passthrough(provider)
+
+    async def _run():
+        effort_cv = set_request_effort("high")
+        try:
+            payloads, _ = await provider._prepare_chat_payload()
+            assert payloads["reasoning_effort"] == "high"
+            await provider.text_chat(session_id="s")
+            assert provider.chat_kwargs["reasoning_effort"] == "high"
+            chunks = [item async for item in provider.text_chat_stream()]
+            assert chunks
+            assert provider.stream_kwargs["reasoning_effort"] == "high"
+        finally:
+            reset_request_effort(effort_cv)
+            clear_request_effort()
+
+        payloads, _ = await provider._prepare_chat_payload(reasoning_effort="low")
+        assert payloads["reasoning_effort"] == "low"
+        assert current_request_effort() is None
+
+    asyncio.run(_run())
 
 
 def test_match_think_command_enable_and_close():

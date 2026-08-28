@@ -4,7 +4,7 @@ AstrBot 插件：按**对话场景**或用户点名，在**本轮**切换 LLM Pr
 
 An AstrBot plugin that routes each incoming LLM request to a scene-specific provider and persona. It never writes API keys, and it never calls `set_provider` to change the session default.
 
-当前版本 **v1.15.0** · 目标 AstrBot **≥ 4.10.4** · 许可证 **AGPL-3.0-only** · 作者 **le**
+当前版本 **v1.15.1** · 目标 AstrBot **≥ 4.10.4** · 许可证 **AGPL-3.0-only** · 作者 **le**
 
 ---
 
@@ -16,7 +16,7 @@ AstrBot 自带的 `/provider`、`/model` 只改当前会话的默认模型。这
 
 群聊默认要先 **@ 机器人**（或回复机器人的消息），再说「切换到某某」「帮我写代码」这类明确意图，才会弹出「是否同意切换」。同意之后才换模型和人设。
 
-开源默认：**插件启用、切换前征求同意、刷屏自检关闭**。场景模型从 AstrBot 下拉框选（官方或你自己添加的 Provider）。思考强度默认 `provider`（不改各家请求头）。群里 `@` 后可发「开启思考 max」。唤醒词可设为包含 / 整句 / 正则，配置里有一套可删的中文样例。
+开源默认：**插件启用、切换前征求同意、刷屏自检关闭**。场景模型从 AstrBot 下拉框选（官方或你自己添加的 Provider）。思考强度默认 `provider`（不改各家请求头）。群里 `@` 后可发「开启思考 max」（会打进本轮 OpenAI 兼容请求的 `extra_body.reasoning_effort`）。唤醒词可设为包含 / 整句 / 正则，配置里有一套可删的中文样例。
 
 ### 功能清单
 
@@ -48,7 +48,7 @@ AstrBot 自带的 `/provider`、`/model` 只改当前会话的默认模型。这
    六个内置场景之外可再加场景（见 `examples/custom_scenes.example.json`）。冲突 id 以额外场景为准。
 
 10. **思考强度**  
-    默认**不覆盖**，沿用各 Provider 在 AstrBot 里的配置。各家协议字段不同，乱注入会 400 或把思考写进正文。打开「覆盖思考强度」后，才按场景档位、自然语言「认真想想」、`/scene think` 注入 OpenAI 形的 `reasoning_effort`，且不写 Ollama 原生 `think`。
+    默认**不覆盖**场景档位，沿用各 Provider 在 AstrBot 里的配置。群里 `@` 后发「开启思考 max」或 `/scene think` **不依赖**「覆盖思考强度」。AstrBot 官方 `ProviderRequest` 没有 `reasoning_effort` 字段，agent runner 组 `text_chat` 时也不会带上插件 `setattr` 的属性，所以只改请求对象是空操作。插件会包一层当前 OpenAI 兼容 Provider，把本轮 HTTP `extra_body.reasoning_effort` 设为该档位。仍不写 Ollama 原生 `think`、DeepSeek `thinking.type`、HTTP 请求头。打开「覆盖思考强度」后，才按场景下拉框 / 「认真想想」注入。
 
 11. **掌嘴 / 张嘴**  
     整句明确说「闭嘴」「别回了」等（不是引用气泡、不是长句里碰巧出现这两个字）后确认一句，默认 10 分钟内不再回复。只有明确「张嘴」才解除。`@` 不会提前解禁。其它插件可通过共享的 `silence.json` 读取同一份静音状态。
@@ -119,7 +119,7 @@ git clone https://github.com/blcj114514/astrbot_plugin_scene_switch.git astrbot_
 ### 不会做的事
 
 - 不在插件配置里保存 API Key，也不要求手填模型 id
-- 不修改 AstrBot 本体
+- 不修改 AstrBot 源码（可为了本轮 `reasoning_effort` 包一层当前 Provider 实例）
 - 不调用 `set_provider` 去改会话默认模型
 - 不改其它插件自己的模型配置，也不改它们插件配置里的人设下拉框
 - 不在未配置 Provider 时请求外部 API
@@ -135,7 +135,7 @@ API keys and model ids live in AstrBot’s official Provider page. In this plugi
 
 In groups, users must **@ the bot** (or reply to it) and clearly ask to switch or to use a capability before a consent prompt appears. The default persona stays until they agree.
 
-Open-source defaults: plugin **on**, **consent required**, flood audit **off**. Bind AstrBot providers (official or custom) from dropdowns. Thinking effort defaults to `provider` (no extra_body / HTTP headers). After `@`, users can send `开启思考 max`. Wakeup matching is contains / exact / regex, with deletable Chinese sample words.
+Open-source defaults: plugin **on**, **consent required**, flood audit **off**. Bind AstrBot providers (official or custom) from dropdowns. Thinking effort defaults to `provider` (no extra_body / HTTP headers until a session think command or overlay is on). After `@`, users can send `开启思考 max`. Wakeup matching is contains / exact / regex, with deletable Chinese sample words.
 
 ### Features
 
@@ -148,7 +148,7 @@ Open-source defaults: plugin **on**, **consent required**, flood audit **off**. 
 7. **Follow-ups** — short phrases like “continue” reuse the last scene.
 8. **Hard rules** — media can go to vision; code fences / stack traces to code; links optionally to search. “What can you do?” is answered from help text, not the chat model.
 9. **Custom scenes** — extra scenes beyond the six builtins (id collision: extra scene wins).
-10. **Reasoning effort** — scene dropdown defaults to `provider` (no extra_body / headers). After `@`, `开启思考 max` sets session `reasoning_effort` only. Optional global overlay still exists.
+10. **Reasoning effort** — scene dropdown defaults to `provider`. After `@`, `开启思考 max` sets this turn's OpenAI-compatible `extra_body.reasoning_effort` (AstrBot ignores `req.reasoning_effort`). Optional global overlay still exists. Native `think` is never written.
 11. **Silence commands** — whole-message “shut up” (not quote bubbles, not accidental substrings) mutes replies for 10 minutes. Only an explicit “speak again” command lifts it. `@` does not unmute. Other plugins can read the same `silence.json`.
 12. **Group flood self-check** — local phrase hit → stage-1 coarse judge → stage-2 must confirm before mute. Weak complaints require addressing this bot. No mute if stage-1 fails without a mention, or if the bot has not spoken in the window. First hit: short mute; repeat in the window: long lock until an admin speak-command.
 13. **Mention queue** — concurrent `@` in one group: waiters get one “please wait” notice, then their original message continues.
@@ -185,7 +185,7 @@ Keep the folder name `astrbot_plugin_scene_switch`. Reload the plugin in WebUI, 
 ### Non-goals
 
 - No API keys or raw model ids in plugin config
-- No patches to AstrBot core
+- No edits to AstrBot source files (the plugin may wrap the current Provider instance for this turn's `reasoning_effort`)
 - No `set_provider` on the session default
 - No edits to other plugins’ model or persona dropdowns
 - No outbound API calls when providers are unbound
@@ -195,11 +195,13 @@ Keep the folder name `astrbot_plugin_scene_switch`. Reload the plugin in WebUI, 
 
 ## 思考强度字段（各家不一样） / Reasoning fields
 
-插件默认不覆盖思考强度。需要按场景改档时，打开配置里的「覆盖思考强度」，并且仍建议优先在 AstrBot Provider 里配好各家字段。
+插件默认不覆盖场景档位。群里「开启思考 max」/ `/scene think` 不依赖「覆盖思考强度」。需要按场景改档时，再打开配置里的「覆盖思考强度」。各家协议字段不同，仍建议优先在 AstrBot Provider 里配好原生字段。
+
+AstrBot 4.x 主聊天路径不会读取 `ProviderRequest.reasoning_effort`：官方请求对象没有该字段，agent runner 组 `text_chat` 时只拷贝 `contexts` / `func_tool` / `session_id` / `model` 等固定键。OpenAI 适配器的 `_prepare_chat_payload` 也会丢掉 `llm_generate(**kwargs)` 里的未知参数。插件因此包一层当前 Provider：在 `_apply_provider_specific_request_overrides` 之后把本轮 `extra_body.reasoning_effort` 写上（这样能盖过 Provider 配置里的 `custom_extra_body` 和「关闭思考」）。仍然**不写** Ollama 原生 `think`、DeepSeek `thinking.type`、HTTP 请求头。非 OpenAI 兼容适配器可能仍会忽略该字段。
 
 | Path | Disable thinking | Enable / scale | Where thoughts land |
 | --- | --- | --- | --- |
-| Any AstrBot Provider | Configure on that Provider | Configure on that Provider | Plugin does not touch it |
+| Any AstrBot Provider | Configure on that Provider | Session think / overlay writes this-turn `extra_body.reasoning_effort` on OpenAI-compatible adapters | Plugin does not write native `think` |
 | Ollama native `/api/chat` | `think: false` | `think: true` or `low` / `medium` / `high` / `max` | `message.thinking` |
 | Ollama OpenAI `/v1` | `reasoning_effort: "none"` | `low` / `medium` / `high` / `max` | `message.reasoning` |
 | Official DeepSeek Chat Completions | `extra_body.thinking.type = disabled` | `type = enabled`, plus top-level `reasoning_effort`: `low` / `high` / `max` | `reasoning_content` |
@@ -210,7 +212,7 @@ Notes:
 - Ollama `/v1` **must not** send native `think` (boolean → 400). Native `/api/chat` **must not** send `think: "none"` (use `false`).
 - Official DeepSeek **must not** use `"none"` to disable thinking; that is the Ollama `/v1` spelling. Use `thinking.type=disabled`.
 - GPT-OSS on Ollama only accepts `low` / `medium` / `high`.
-- AstrBot’s official `ProviderRequest` has no `extra_body`. Even with override on, the plugin only writes OpenAI-style `reasoning_effort`. It will **not** attach Ollama native `think`.
+- AstrBot’s official `ProviderRequest` has no `reasoning_effort` / `extra_body`. Setting `req.reasoning_effort` is ignored on the main chat path. The plugin wraps the current OpenAI-compatible Provider so this turn's HTTP `extra_body` carries `reasoning_effort`. It will **not** attach Ollama native `think`.
 
 The classifier defaults to `classifier_reasoning_effort=provider` as well.
 

@@ -76,14 +76,20 @@ from scene_switch.caption import should_caption
 from scene_switch.queue import WAIT_TEXT, MentionQueue
 from scene_switch.sanitize import chain_has_at, strip_model_mentions
 from scene_switch.state import SessionStore
-from scene_switch.think import inject_reasoning_effort, normalize_effort
+from scene_switch.think import (
+    ensure_provider_effort_passthrough,
+    inject_reasoning_effort,
+    normalize_effort,
+    reset_request_effort,
+    set_request_effort,
+)
 
 
 @register(
     "astrbot_plugin_scene_switch",
     "le",
     "按对话场景或用户点名，审核同意后切换本轮 LLM Provider 和人设",
-    "1.15.0",
+    "1.15.1",
 )
 class Main(Star):
     def __init__(self, context: Context, config: AstrBotConfig | None = None):
@@ -122,6 +128,7 @@ class Main(Star):
         self.silence = SilenceStore(silence_path_from_plugin_data(path.parent))
         self.flood = FloodStore(flood_path_from_plugin_data(path.parent))
         loaded = self.store.load()
+        self._bind_think_passthrough()
         logger.info(
             "场景模型切换插件已加载，scenes=%s state=%s restored=%s",
             list(self.router.settings.scenes),
@@ -139,18 +146,55 @@ class Main(Star):
         return self.router.settings
 
     def _provider_ids(self) -> tuple[str, ...]:
-        try:
-            providers = self.context.get_all_providers()
-        except Exception:
-            logger.exception("failed to list providers")
-            return ()
         ids: list[str] = []
-        for provider in providers or []:
+        for provider in self._iter_providers():
             try:
                 ids.append(provider.meta().id)
             except Exception:
                 continue
         return tuple(ids)
+
+    def _iter_providers(self) -> list:
+        try:
+            return list(self.context.get_all_providers() or [])
+        except Exception:
+            logger.exception("failed to list providers")
+            return []
+
+    def _bind_think_passthrough(
+        self,
+        *,
+        provider_id: str | None = None,
+        umo: str | None = None,
+    ) -> None:
+        for provider in self._iter_providers():
+            ensure_provider_effort_passthrough(provider)
+        if provider_id:
+            try:
+                extra = self.context.get_provider_by_id(provider_id)
+            except Exception:
+                extra = None
+            if extra is not None:
+                ensure_provider_effort_passthrough(extra)
+        if umo:
+            try:
+                using = self.context.get_using_provider(umo=umo)
+            except TypeError:
+                try:
+                    using = self.context.get_using_provider()
+                except Exception:
+                    using = None
+            except Exception:
+                using = None
+            if using is not None:
+                ensure_provider_effort_passthrough(using)
+
+    def _release_request_effort(self, event: AstrMessageEvent) -> None:
+        effort_cv = event.get_extra("scene_switch_effort_token")
+        if effort_cv is None:
+            return
+        reset_request_effort(effort_cv)
+        event.set_extra("scene_switch_effort_token", None)
 
     def _sender_id(self, event: AstrMessageEvent) -> str:
         if hasattr(event, "get_sender_id"):
@@ -543,30 +587,36 @@ class Main(Star):
     ) -> str:
         extra: dict = {}
         effort = normalize_effort(reasoning_effort)
+        effort_cv = None
         if effort:
             extra["reasoning_effort"] = effort
             extra["max_tokens"] = max_tokens
             extra["temperature"] = 0
+            self._bind_think_passthrough(provider_id=provider_id)
+            effort_cv = set_request_effort(effort)
         try:
-            resp = await self.context.llm_generate(
-                chat_provider_id=provider_id,
-                prompt=prompt,
-                system_prompt=system,
-                **extra,
-            )
-        except TypeError:
             try:
                 resp = await self.context.llm_generate(
                     chat_provider_id=provider_id,
                     prompt=prompt,
                     system_prompt=system,
+                    **extra,
                 )
             except TypeError:
-                resp = await self.context.llm_generate(
-                    chat_provider_id=provider_id,
-                    prompt=f"{system}\n\n{prompt}",
-                )
-        return (getattr(resp, "completion_text", None) or "").strip()
+                try:
+                    resp = await self.context.llm_generate(
+                        chat_provider_id=provider_id,
+                        prompt=prompt,
+                        system_prompt=system,
+                    )
+                except TypeError:
+                    resp = await self.context.llm_generate(
+                        chat_provider_id=provider_id,
+                        prompt=f"{system}\n\n{prompt}",
+                    )
+            return (getattr(resp, "completion_text", None) or "").strip()
+        finally:
+            reset_request_effort(effort_cv)
 
     def _is_self_message(self, event: AstrMessageEvent) -> bool:
         try:
@@ -1051,11 +1101,19 @@ class Main(Star):
                 event.unified_msg_origin, self._sender_id(event)
             )
             session_effort = self.store.get_think(session_key)
+            effort = None
             if self.settings.override_reasoning_effort:
-                inject_reasoning_effort(req, payload.get("reasoning_effort"))
+                effort = payload.get("reasoning_effort")
             elif session_effort or payload.get("source") == "think":
-                inject_reasoning_effort(
-                    req, session_effort or payload.get("reasoning_effort")
+                effort = session_effort or payload.get("reasoning_effort")
+            if inject_reasoning_effort(req, effort):
+                self._bind_think_passthrough(
+                    provider_id=payload.get("provider_id"),
+                    umo=event.unified_msg_origin,
+                )
+                event.set_extra(
+                    "scene_switch_effort_token",
+                    set_request_effort(getattr(req, "reasoning_effort", effort)),
                 )
             if payload.get("applied"):
                 official_id = payload.get("official_persona_id")
@@ -1077,6 +1135,7 @@ class Main(Star):
 
     @filter.on_llm_response()
     async def on_llm_response(self, event: AstrMessageEvent, _response) -> None:
+        self._release_request_effort(event)
         if self._is_classifying(event):
             return
         if self._is_group(event) and self._is_mentioned(event):
@@ -1140,6 +1199,7 @@ class Main(Star):
 
     @filter.after_message_sent()
     async def on_after_message_sent(self, event: AstrMessageEvent) -> None:
+        self._release_request_effort(event)
         if self._is_classifying(event) or not self._is_group(event):
             return
         result = event.get_result()
@@ -1221,7 +1281,7 @@ class Main(Star):
                 yield event.plain_result(
                     "当前会话思考强度："
                     + (current or "未设置（沿用各 Provider 自己的配置）")
-                    + "。插件只写 reasoning_effort，不改请求头。"
+                    + "。下一轮会把 reasoning_effort 打进 OpenAI 兼容请求，不写原生 think。"
                 )
                 return
             if token in {"auto", "default", "默认", "provider"}:
@@ -1238,7 +1298,8 @@ class Main(Star):
             self.store.set_think(key, effort, self.settings.think_ttl_seconds)
             yield event.plain_result(
                 f"已将本会话思考强度设为 {effort}。"
-                "仅写入 AstrBot 的 reasoning_effort；各家 extra_body / 请求头请在 Provider 里配。"
+                "下一轮聊天会把 reasoning_effort 打进 OpenAI 兼容请求；"
+                "不写 Ollama 原生 think / 请求头。"
             )
             return
         if action in {"status", "当前"}:
@@ -1310,11 +1371,14 @@ class Main(Star):
             )
         else:
             lines.append("- 黏性：无")
-        if self.settings.override_reasoning_effort:
-            think = self.store.get_think(key)
-            lines.append(f"- 思考强度：{think or '场景默认'}（插件覆盖已开）")
+        think = self.store.get_think(key)
+        if think:
+            overlay = "，插件覆盖已开" if self.settings.override_reasoning_effort else ""
+            lines.append(f"- 思考强度：会话 {think}{overlay}")
+        elif self.settings.override_reasoning_effort:
+            lines.append("- 思考强度：场景默认（插件覆盖已开）")
         else:
-            lines.append("- 思考强度：沿用 AstrBot Provider（插件覆盖关闭）")
+            lines.append("- 思考强度：沿用 AstrBot Provider")
         if self.settings.switch_persona:
             if not self.settings.sync_official_persona:
                 official = "，仅本轮提示词"

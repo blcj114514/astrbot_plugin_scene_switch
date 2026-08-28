@@ -255,7 +255,7 @@
       "high",
       "max"
     ],
-    "hint": "默认 provider：不改写，沿用该审判 Provider 在 AstrBot 里的思考设置。Ollama /v1 可勾「关闭思考」或这里选 none。官方 DeepSeek 请在 Provider 里设 thinking.type=disabled，不要用 none（那是 Ollama /v1 的关思考写法）。",
+    "hint": "默认 provider：不改写。若选 none/low/medium/high/max，插件把 reasoning_effort 打进该审判调用的 extra_body（不写原生 think）。Ollama /v1 也可在 Provider 里勾「关闭思考」。官方 DeepSeek 请在 Provider 里设 thinking.type=disabled，不要用 none。",
     "default": "provider"
   },
   "classifier_timeout_seconds": {
@@ -267,7 +267,7 @@
   "override_reasoning_effort": {
     "description": "覆盖本轮思考强度",
     "type": "bool",
-    "hint": "默认关闭：思考由各场景对应的 AstrBot Provider 自己管，插件不写 extra_body、不写 Ollama 原生 think、不改 HTTP 请求头。打开后才会按场景下拉框注入 reasoning_effort。群里「开启思考 max」是会话级指令，不依赖这一项。",
+    "hint": "默认关闭：场景档位不改写。打开后按场景下拉框注入。群里「开启思考 max」不依赖这一项。AstrBot 主聊天不会读取 req.reasoning_effort，插件会改写本轮 extra_body.reasoning_effort（仍不写原生 think）。",
     "default": false
   },
   "think_ttl_seconds": {
@@ -290,7 +290,7 @@
   "session_think_commands": {
     "description": "允许群聊「开启思考」指令",
     "type": "bool",
-    "hint": "群里需先 @，再发「开启思考 max / high / medium / low / none」或「关闭思考」。只写 reasoning_effort。",
+    "hint": "群里需先 @，再发「开启思考 max / high / medium / low / none」或「关闭思考」。会打进本轮 OpenAI 兼容请求的 extra_body.reasoning_effort，不写原生 think。",
     "default": true
   },
   "switch_persona": {
@@ -379,7 +379,7 @@
           "high",
           "max"
         ],
-        "hint": "provider=不改写，沿用该 Provider 在 AstrBot 里的思考/请求头。只有打开「覆盖思考强度」时，none/low/medium/high/max 才会写入 reasoning_effort。",
+        "hint": "provider=不改写。覆盖或会话「开启思考」会把 reasoning_effort 打进本轮 OpenAI 兼容请求的 extra_body（官方 ProviderRequest 没有该字段）。不写原生 think。",
         "default": "provider"
       },
       "persona_id": {
@@ -452,7 +452,7 @@
           "high",
           "max"
         ],
-        "hint": "provider=不改写，沿用该 Provider 在 AstrBot 里的思考/请求头。只有打开「覆盖思考强度」时，none/low/medium/high/max 才会写入 reasoning_effort。",
+        "hint": "provider=不改写。覆盖或会话「开启思考」会把 reasoning_effort 打进本轮 OpenAI 兼容请求的 extra_body（官方 ProviderRequest 没有该字段）。不写原生 think。",
         "default": "provider"
       },
       "persona_id": {
@@ -526,7 +526,7 @@
           "max"
         ],
         "default": "provider",
-        "hint": "provider=不改写，沿用该 Provider 在 AstrBot 里的思考/请求头。只有打开「覆盖思考强度」时，none/low/medium/high/max 才会写入 reasoning_effort。"
+        "hint": "provider=不改写。覆盖或会话「开启思考」会把 reasoning_effort 打进本轮 OpenAI 兼容请求的 extra_body（官方 ProviderRequest 没有该字段）。不写原生 think。"
       },
       "persona_id": {
         "description": "使用 AstrBot 已有人设",
@@ -599,7 +599,7 @@
           "max"
         ],
         "default": "provider",
-        "hint": "provider=不改写，沿用该 Provider 在 AstrBot 里的思考/请求头。只有打开「覆盖思考强度」时，none/low/medium/high/max 才会写入 reasoning_effort。"
+        "hint": "provider=不改写。覆盖或会话「开启思考」会把 reasoning_effort 打进本轮 OpenAI 兼容请求的 extra_body（官方 ProviderRequest 没有该字段）。不写原生 think。"
       },
       "persona_id": {
         "description": "使用 AstrBot 已有人设",
@@ -672,7 +672,7 @@
           "max"
         ],
         "default": "provider",
-        "hint": "provider=不改写，沿用该 Provider 在 AstrBot 里的思考/请求头。只有打开「覆盖思考强度」时，none/low/medium/high/max 才会写入 reasoning_effort。"
+        "hint": "provider=不改写。覆盖或会话「开启思考」会把 reasoning_effort 打进本轮 OpenAI 兼容请求的 extra_body（官方 ProviderRequest 没有该字段）。不写原生 think。"
       },
       "persona_id": {
         "description": "使用 AstrBot 已有人设",
@@ -745,7 +745,7 @@
           "max"
         ],
         "default": "provider",
-        "hint": "provider=不改写，沿用该 Provider 在 AstrBot 里的思考/请求头。只有打开「覆盖思考强度」时，none/low/medium/high/max 才会写入 reasoning_effort。"
+        "hint": "provider=不改写。覆盖或会话「开启思考」会把 reasoning_effort 打进本轮 OpenAI 兼容请求的 extra_body（官方 ProviderRequest 没有该字段）。不写原生 think。"
       },
       "persona_id": {
         "description": "使用 AstrBot 已有人设",
@@ -842,7 +842,7 @@
             "max"
           ],
           "default": "provider",
-          "hint": "provider=不改写，沿用该 Provider 在 AstrBot 里的思考/请求头。只有打开「覆盖思考强度」时，none/low/medium/high/max 才会写入 reasoning_effort。"
+          "hint": "provider=不改写。覆盖或会话「开启思考」会把 reasoning_effort 打进本轮 OpenAI 兼容请求的 extra_body（官方 ProviderRequest 没有该字段）。不写原生 think。"
         },
         "persona_id": {
           "description": "使用 AstrBot 已有人设",

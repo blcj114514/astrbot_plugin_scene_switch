@@ -597,8 +597,8 @@ class SceneRouter:
                 stop_for_switch_only=True,
                 consent_prompt=(
                     "用法：开启思考 none|low|medium|high|max，例如「开启思考 max」。"
-                    "关闭请说「关闭思考」。插件只写入 AstrBot 的 reasoning_effort，"
-                    "不会改各家请求头或 extra_body。"
+                    "关闭请说「关闭思考」。下一轮会把 reasoning_effort 打进 "
+                    "OpenAI 兼容请求，不写原生 think。"
                 ),
             )
         if cmd.effort == "auto":
