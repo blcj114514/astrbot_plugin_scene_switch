@@ -15,6 +15,16 @@ _DOT_KEY = re.compile(r"\b[a-f0-9]{32}\.[A-Za-z0-9]{10,}\b")
 _BEARER = re.compile(r"Bearer\s+[A-Za-z0-9._\-]{16,}")
 
 SKIP_SUFFIXES = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".woff", ".woff2"}
+# Published support QQ may appear in listing/docs only. Other instance ids stay hashed.
+_PUBLIC_SUPPORT_QQ = "1844372102"
+_SUPPORT_QQ_FILES = {
+    "metadata.yaml",
+    "README.md",
+    "CHANGELOG.md",
+    "SECURITY.md",
+    ".github/ISSUE_TEMPLATE/bug_report.md",
+    "tests/test_secrets.py",
+}
 # (char length, sha256) of instance identifiers that must not re-enter the tree.
 _FORBIDDEN_HASHES = (
     (10, "abb4d7e417510d22b2bb00103047fa26370d6f3c7c39554e37c5384984973afd"),
@@ -25,16 +35,19 @@ _FORBIDDEN_HASHES = (
 )
 
 
-def _contains_forbidden_identifier(text: str) -> bool:
+def _contains_forbidden_identifier(text: str, *, rel: str = "") -> bool:
     wanted: dict[int, set[str]] = {}
     for length, digest in _FORBIDDEN_HASHES:
         wanted.setdefault(length, set()).add(digest)
+    allowed = rel.replace("\\", "/") in _SUPPORT_QQ_FILES
     for length, digests in wanted.items():
         if length > len(text):
             continue
         for i in range(0, len(text) - length + 1):
             chunk = text[i : i + length]
             if hashlib.sha256(chunk.encode("utf-8")).hexdigest() in digests:
+                if allowed and chunk == _PUBLIC_SUPPORT_QQ:
+                    continue
                 return True
     return False
 
@@ -89,7 +102,7 @@ def test_tracked_files_do_not_contain_secrets():
         if _DOT_KEY.search(text) or _BEARER.search(text):
             offenders.append(str(path.relative_to(ROOT)))
             continue
-        if _contains_forbidden_identifier(text):
+        if _contains_forbidden_identifier(text, rel=str(path.relative_to(ROOT))):
             offenders.append(str(path.relative_to(ROOT)))
             continue
         for match in _CLOUD_KEY.finditer(text):

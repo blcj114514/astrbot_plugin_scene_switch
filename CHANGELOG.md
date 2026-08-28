@@ -4,6 +4,7 @@
 
 - Main-chat thinking actually takes effect on OpenAI-compatible providers: AstrBot's `ProviderRequest` has no `reasoning_effort`, and the agent runner never copies a setattr on that request into `text_chat`. The plugin now wraps the current Provider so this turn's HTTP `extra_body.reasoning_effort` is set (still no native `think` / headers).
 - Docs and schema no longer imply that writing `req.reasoning_effort` is enough. Tests now simulate the official runner drop and the extra_body merge order.
+- Marketplace listing contact: QQ 1844372102 for plugin bugs only
 
 ## v1.15.0
 

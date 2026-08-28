@@ -278,6 +278,12 @@ python -m pytest
 
 This working copy is a complete git repo with history starting at v1.15.0. Cursor Origin hosting is not available on native Windows; use GitHub or another host.
 
+## 反馈 / Support
+
+插件问题或 bug 请用 QQ **1844372102** 联系。请只为这个插件的问题来找，不要闲聊加好友。
+
+GitHub issues are also welcome: do not paste API keys, tokens, or unrelated account ids.
+
 ## 许可 / License
 
 GNU Affero General Public License v3.0 only. AstrBot itself is AGPL-3.0.

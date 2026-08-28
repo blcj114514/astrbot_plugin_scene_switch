@@ -15,4 +15,4 @@ labels: []
 
 **What you expected**
 
-Do not paste API keys, tokens, or QQ numbers.
+Plugin bugs can also be sent to the support QQ listed in README. Do not paste API keys, tokens, or unrelated account ids.

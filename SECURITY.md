@@ -1,6 +1,8 @@
 # Security
 
-Do not put API keys, tokens, or account ids in plugin config, issues, screenshots, or `ollama_catalog.json`.
+Do not put API keys, tokens, or unrelated account ids in plugin config, screenshots, or `ollama_catalog.json`.
+
+The plugin support QQ in `metadata.yaml` / README is published on purpose for bug reports only.
 
 - Keys belong in AstrBot Provider config, or a local gitignored `.env` for the playground.
 - The playground listens on 127.0.0.1 and has no login. Do not bind it on a LAN when a key is set.
