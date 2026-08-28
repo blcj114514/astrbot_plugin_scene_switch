@@ -1,0 +1,33 @@
+{
+  "note": "Playground catalog only. Bind real models in AstrBot Provider settings. Do not put API keys here.",
+  "models": [
+    "your-chat-model",
+    "your-code-model",
+    "your-search-model",
+    "your-vision-model"
+  ],
+  "judge": {
+    "model": "your-classifier-model",
+    "reasoning_effort": "none",
+    "max_tokens": 80
+  },
+  "scenes": {
+    "chat": { "model": "your-chat-model", "label": "闲聊" },
+    "code": { "model": "your-code-model", "label": "代码" },
+    "search": { "model": "your-search-model", "label": "搜索" },
+    "vision": { "model": "your-vision-model", "label": "看图" },
+    "translate": { "model": "your-chat-model", "label": "翻译" },
+    "write": { "model": "your-code-model", "label": "写作" }
+  },
+  "aliases": {
+    "deepseek": "code",
+    "gpt": "chat"
+  },
+  "think_levels": {
+    "none": { "openai": "none" },
+    "low": { "openai": "low" },
+    "medium": { "openai": "medium" },
+    "high": { "openai": "high" },
+    "max": { "openai": "max" }
+  }
+}

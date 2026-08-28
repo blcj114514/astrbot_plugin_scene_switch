@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: AstrBot
+    url: https://github.com/AstrBotDevs/AstrBot
+    about: Framework issues belong in AstrBot, not this plugin.

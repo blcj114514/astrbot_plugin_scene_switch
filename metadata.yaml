@@ -1,0 +1,7 @@
+name: astrbot_plugin_scene_switch
+display_name: 场景模型切换
+desc: 按场景或点名切换本轮 LLM 与人设。默认征求同意；不保存 API Key。
+version: v1.15.0
+author: le
+repo: https://github.com/blcj114514/astrbot_plugin_scene_switch
+min_astrbot_version: v4.10.4

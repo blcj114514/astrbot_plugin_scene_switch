@@ -1,0 +1,872 @@
+{
+  "enabled": {
+    "description": "启用场景模型切换",
+    "type": "bool",
+    "hint": "关闭后插件不再改写本轮 Provider，指令仍可用。",
+    "default": true
+  },
+  "allow_private": {
+    "description": "允许在私聊中自动切换",
+    "type": "bool",
+    "default": true
+  },
+  "allow_group": {
+    "description": "允许在群聊中自动切换",
+    "type": "bool",
+    "hint": "群聊黏性按「会话 + 发送者」隔离，不会串到其他人。",
+    "default": true
+  },
+  "skip_command_like_messages": {
+    "description": "跳过命令样式消息",
+    "type": "bool",
+    "hint": "以 / . ! 等前缀开头的消息不参与自动路由，避免干扰 AstrBot 指令。",
+    "default": true
+  },
+  "command_like_prefixes": {
+    "description": "视为命令的前缀",
+    "type": "text",
+    "hint": "每行一个前缀。",
+    "default": "/\n.\n!"
+  },
+  "honor_existing_selection": {
+    "description": "尊重已指定的 Provider",
+    "type": "bool",
+    "hint": "若 WebUI、API 或其他插件已经设置 selected_provider，本插件不覆盖。征求同意模式请保持关闭，否则其它插件抢先指定模型后无法弹出切换。",
+    "default": false
+  },
+  "require_consent": {
+    "description": "切换前征求同意",
+    "type": "bool",
+    "hint": "开启后：未同意前一直用默认场景；只有点名/能力请求才会让审核 AI 判断，并发「是否同意切换」。同意后才换模型和人设。",
+    "default": true
+  },
+  "consent_prompt_template": {
+    "description": "征求同意的文案",
+    "type": "text",
+    "hint": "可用 {label} {scene} {persona} {provider} {reason}。",
+    "default": "该对话更适合切换到{label}由它来回答你，你是否同意？回复「同意」或「不同意」。"
+  },
+  "switch_require_admin": {
+    "description": "切换需要管理员",
+    "type": "bool",
+    "hint": "默认关闭。打开后，点名切换、同意切换、/scene use|lock 都仅管理员可用。普通人仍可用默认场景。",
+    "default": false
+  },
+  "switch_cooldown_seconds": {
+    "description": "切换冷却秒数",
+    "type": "int",
+    "hint": "同一发送者成功切换后，多少秒内不再发起新的切换申请。0 表示不冷却。",
+    "default": 60
+  },
+  "consent_ttl_seconds": {
+    "description": "同意等待超时秒数",
+    "type": "int",
+    "hint": "发出申请后，超过该时间未回复「同意/不同意」则作废。",
+    "default": 120
+  },
+  "prompt_cooldown_seconds": {
+    "description": "重复申请冷却秒数",
+    "type": "int",
+    "hint": "刚问过「是否同意」后，多少秒内不再刷同一条申请。",
+    "default": 30
+  },
+  "default_scene_id": {
+    "description": "默认场景 ID",
+    "type": "string",
+    "hint": "未切换时使用的场景，通常为 chat。",
+    "default": "chat"
+  },
+  "blocked_personas": {
+    "description": "禁止调用的人设",
+    "type": "text",
+    "hint": "每行一个。命中后不会切换。可留空。",
+    "default": ""
+  },
+  "blocked_sender_ids": {
+    "description": "用户黑名单（QQ 号）",
+    "type": "text",
+    "hint": "每行一个发送者 ID。这些人机/黑名单用户的消息会被直接丢弃，不进审判、不回复。",
+    "default": ""
+  },
+  "flood_audit_enabled": {
+    "description": "群聊刷屏自检",
+    "type": "bool",
+    "hint": "默认关闭。打开后：本地命中刷屏样例词 → 第一级粗判 → 必须第二级终审才静音。请自行选择两级审核用的 Provider，插件不会写死模型 id。",
+    "default": false
+  },
+  "flood_provider_id": {
+    "description": "刷屏审核 Provider",
+    "type": "string",
+    "hint": "第一级粗判用的 Provider。从 AstrBot 已配置列表里选（官方或自定义均可）。留空则不跑刷屏审核。",
+    "default": "",
+    "_special": "select_provider"
+  },
+  "flood_bot_names": {
+    "description": "本机器人名字",
+    "type": "text",
+    "hint": "每行一个机器人名字/群名片。留空则只认「机器人」这类通称。",
+    "default": ""
+  },
+  "flood_admin_ids": {
+    "description": "长禁解禁管理员 QQ",
+    "type": "text",
+    "hint": "每行一个发送者 ID。短禁到期或任何人说「张嘴」可解；长禁只有这里的人说「张嘴」才能解。",
+    "default": ""
+  },
+  "flood_strong_phrases": {
+    "description": "刷屏强触发样例词（可整段删除）",
+    "type": "text",
+    "hint": "命中后不要求点名也会叫醒第一级审核。删空则不用这组词。",
+    "default": "刷屏了\n刷屏了吧\n刷屏了啊\n又刷屏\n又在刷屏\n别刷屏\n不要刷屏\n别再刷了\n消息也太多了\n消息太多了吧\n这些消息怎么这么多\n发的消息也太多了\n发这么多干嘛\n怎么发这么多\n话怎么这么多\n话也太多了\n回这么多干嘛\n回得也太多\n回太多了\n能不能少回点\n能不能少说点\n能不能少发点\n别发这么多\n别回这么多\n别刷了行不行\n占屏了\n占满屏了\n别占屏\n一条接一条发\nstop spamming\nstop spam"
+  },
+  "flood_weak_phrases": {
+    "description": "刷屏弱触发样例词（可整段删除）",
+    "type": "text",
+    "hint": "必须 @ 或点到本机器人名字才生效。删空则不用这组词。",
+    "default": "怎么这么烦人\n你怎么这么烦\n你烦不烦\n怎么还不闭嘴\n这机器人好烦\n这机器人刷屏\n这机器人话太多\n机器人好烦\n机器人刷屏\n机器人话太多\n你们机器人能不能少说"
+  },
+  "flood_short_seconds": {
+    "description": "第一次验实禁言秒数",
+    "type": "int",
+    "hint": "默认 180 秒（3 分钟）。",
+    "default": 180
+  },
+  "flood_spoke_window_seconds": {
+    "description": "机器人发言查验窗口秒数",
+    "type": "int",
+    "hint": "默认 600 秒。窗口内机器人没发过言则不禁。",
+    "default": 600
+  },
+  "flood_strike_window_seconds": {
+    "description": "反复触发统计窗口秒数",
+    "type": "int",
+    "hint": "默认 1800 秒。窗口内达到长禁次数就锁到管理员解开。",
+    "default": 1800
+  },
+  "flood_strikes_for_lock": {
+    "description": "长禁所需验实次数",
+    "type": "int",
+    "hint": "默认 2：第一次 3 分钟，同一窗口第二次起长禁。",
+    "default": 2
+  },
+  "flood_verifier_provider_id": {
+    "description": "刷屏总审核 Provider",
+    "type": "string",
+    "hint": "第二级终审 Provider。从 AstrBot 已配置列表里选。留空则不会静音。",
+    "default": "",
+    "_special": "select_provider"
+  },
+  "uncertain_route": {
+    "description": "无法判定时的行为",
+    "type": "string",
+    "options": [
+      "keep_default",
+      "chat",
+      "code",
+      "search",
+      "vision",
+      "translate",
+      "write"
+    ],
+    "hint": "keep_default 表示不改写，继续用当前会话默认模型。",
+    "default": "keep_default"
+  },
+  "announce_switch": {
+    "description": "回复时标注当前场景",
+    "type": "string",
+    "options": [
+      "never",
+      "force_only",
+      "always"
+    ],
+    "hint": "force_only：仅在用户点名切换时用短标签〔人设〕标注；always：场景真正换了才标注，同一场景连说几句不再刷前缀。",
+    "default": "force_only"
+  },
+  "log_decisions": {
+    "description": "在日志中打印路由决策",
+    "type": "bool",
+    "default": true
+  },
+  "sticky_enabled": {
+    "description": "点名切换后短时黏住",
+    "type": "bool",
+    "hint": "点名或自动切到某场景后，接下来几轮默认继续用该场景和人设。",
+    "default": true
+  },
+  "sticky_rounds": {
+    "description": "黏性保持轮数",
+    "type": "int",
+    "default": 3
+  },
+  "sticky_ttl_seconds": {
+    "description": "黏性保持秒数",
+    "type": "int",
+    "default": 600
+  },
+  "sticky_release_on_opposite": {
+    "description": "遇到明确反方向信号时释放黏性",
+    "type": "bool",
+    "hint": "例如刚锁在代码模型，下一句是「陪我随便聊聊」则改走闲聊。",
+    "default": true
+  },
+  "follow_up_enabled": {
+    "description": "短句跟进沿用上一场景",
+    "type": "bool",
+    "hint": "「继续」「详细点」这类短句会沿用上一次命中的场景。",
+    "default": true
+  },
+  "follow_up_max_chars": {
+    "description": "跟进短句最大字数",
+    "type": "int",
+    "default": 20
+  },
+  "follow_up_keywords": {
+    "description": "视为跟进的短句",
+    "type": "text",
+    "hint": "每行一个。整句匹配（去掉标点后）才算跟进。",
+    "default": "继续\n展开\n详细点\n再说说\n然后呢\n还有呢\n接着说\ncontinue\nmore\ngo on"
+  },
+  "classifier_mode": {
+    "description": "审判模型用法",
+    "type": "string",
+    "options": [
+      "llm_for_language",
+      "rules_then_llm",
+      "rules_only"
+    ],
+    "hint": "llm_for_language：自然语言交给审判模型分析（推荐，例如「我需要你帮我写代码」）。rules_then_llm：关键词没命中才审判。rules_only：不用审判模型。",
+    "default": "llm_for_language"
+  },
+  "classifier_provider_id": {
+    "description": "审判模型（审核 AI）",
+    "type": "string",
+    "_special": "select_provider",
+    "hint": "从 AstrBot 已经配好的 Provider 里选（DeepSeek、GPT、Ollama 都可以）。密钥和模型 id 写在官方 Provider 页，不要填进这个插件。它只负责判断场景，不负责回答用户。未选择时退回关键词规则。",
+    "default": ""
+  },
+  "classifier_reasoning_effort": {
+    "description": "审判模型思考强度",
+    "type": "string",
+    "options": [
+      "provider",
+      "none",
+      "low",
+      "medium",
+      "high",
+      "max"
+    ],
+    "hint": "默认 provider：不改写，沿用该审判 Provider 在 AstrBot 里的思考设置。Ollama /v1 可勾「关闭思考」或这里选 none。官方 DeepSeek 请在 Provider 里设 thinking.type=disabled，不要用 none（那是 Ollama /v1 的关思考写法）。",
+    "default": "provider"
+  },
+  "classifier_timeout_seconds": {
+    "description": "审判超时秒数",
+    "type": "int",
+    "hint": "超时后改用本地启发式，并只卡住正在审判的那个会话，其它会话照常路由。默认 12 秒。",
+    "default": 12
+  },
+  "override_reasoning_effort": {
+    "description": "覆盖本轮思考强度",
+    "type": "bool",
+    "hint": "默认关闭：思考由各场景对应的 AstrBot Provider 自己管，插件不写 extra_body、不写 Ollama 原生 think、不改 HTTP 请求头。打开后才会按场景下拉框注入 reasoning_effort。群里「开启思考 max」是会话级指令，不依赖这一项。",
+    "default": false
+  },
+  "think_ttl_seconds": {
+    "description": "会话思考强度保持秒数",
+    "type": "int",
+    "hint": "「开启思考 max」或 /scene think 之后，该强度保持多久。",
+    "default": 3600
+  },
+  "wakeup_match_mode": {
+    "description": "唤醒词匹配方式",
+    "type": "string",
+    "options": [
+      "contains",
+      "exact",
+      "regex"
+    ],
+    "hint": "contains=句子里包含唤醒词；exact=去掉标点后整句等于唤醒词；regex=每行一条正则。可被各场景覆盖。",
+    "default": "contains"
+  },
+  "session_think_commands": {
+    "description": "允许群聊「开启思考」指令",
+    "type": "bool",
+    "hint": "群里需先 @，再发「开启思考 max / high / medium / low / none」或「关闭思考」。只写 reasoning_effort。",
+    "default": true
+  },
+  "switch_persona": {
+    "description": "切换模型时同步换人设",
+    "type": "bool",
+    "hint": "开启后切场景会换人设：本轮 system prompt、AstrBot 官方会话人设、其它插件读到的人设栏目都会覆盖成新角色。不改其它插件的模型。",
+    "default": true
+  },
+  "sync_official_persona": {
+    "description": "覆盖 AstrBot 官方人设",
+    "type": "bool",
+    "hint": "私聊写入当前对话 persona_id（官方 /persona 和 WebUI 人设栏目）。仅当自定义规则里已经强制过人设时，才覆盖 session_service_config.persona_id，不会新建强制规则。内联人设登记为 scene_switch_<场景>。关闭则只改本轮提示词。",
+    "default": true
+  },
+  "sync_official_persona_in_groups": {
+    "description": "群聊也写官方人设",
+    "type": "bool",
+    "hint": "官方人设按整群一份。默认关闭：群聊只改本轮提示词，避免 A 切场景把 B 的官方人设也换掉。打开后群会话官方人设会跟场景走。",
+    "default": false
+  },
+  "persona_mode": {
+    "description": "人设叠加方式",
+    "type": "string",
+    "options": [
+      "overlay",
+      "replace"
+    ],
+    "hint": "overlay：叠在原有系统提示后面（会先清掉旧的官方 Persona Instructions，避免角色打架）。replace：仍保留其他系统文本，但声明本轮以场景人设为准。",
+    "default": "overlay"
+  },
+  "model_aliases": {
+    "description": "模型 / 场景别名",
+    "type": "text",
+    "hint": "每行一条：别名=场景id 或 别名=ProviderID。用户说「用 gpt」时按这里解析。",
+    "default": "闲聊=chat\n代码=code\n编程=code\n搜索=search\n看图=vision\n识图=vision\n翻译=translate\n写作=write\n润色=write\ngpt=chat\ndeepseek=code"
+  },
+  "chat": {
+    "description": "闲聊场景",
+    "type": "object",
+    "hint": "日常闲聊、陪伴、短回复。Provider 留空表示禁用该场景。",
+    "items": {
+      "provider_id": {
+        "description": "对应的聊天模型",
+        "type": "string",
+        "_special": "select_provider",
+        "hint": "从 AstrBot 已经配好的 Provider 里选：官方接入和你自己添加的自定义 Provider 都会出现。不要在这里填 API Key 或模型 id。",
+        "default": ""
+      },
+      "aliases": {
+        "description": "场景别名",
+        "type": "text",
+        "default": "闲聊\n陪聊\n聊天\nchat"
+      },
+      "keywords": {
+        "description": "触发关键词",
+        "type": "text",
+        "hint": "每行一个。命中后倾向走本场景。",
+        "default": "闲聊\n陪我聊聊\n陪陪我\n安慰我\n晚安\n早上好\n想你了\n无聊\n哈哈"
+      },
+      "wakeup_words": {
+        "description": "唤醒词（可整段删除）",
+        "type": "text",
+        "hint": "每行一个。匹配方式见「唤醒词匹配方式」。删空则本场景不靠唤醒词点名。",
+        "default": "闲聊\n陪聊\n闲聊助手"
+      },
+      "wakeup_match": {
+        "description": "本场景唤醒匹配",
+        "type": "string",
+        "options": [
+          "inherit",
+          "contains",
+          "exact",
+          "regex"
+        ],
+        "hint": "inherit 表示用全局设置。",
+        "default": "inherit"
+      },
+      "reasoning_effort": {
+        "description": "思考强度",
+        "type": "string",
+        "options": [
+          "provider",
+          "none",
+          "low",
+          "medium",
+          "high",
+          "max"
+        ],
+        "hint": "provider=不改写，沿用该 Provider 在 AstrBot 里的思考/请求头。只有打开「覆盖思考强度」时，none/low/medium/high/max 才会写入 reasoning_effort。",
+        "default": "provider"
+      },
+      "persona_id": {
+        "description": "使用 AstrBot 已有人设",
+        "type": "string",
+        "_special": "select_persona",
+        "hint": "本轮用该人设的系统提示。留空则用内联人设或内置默认。填 off 表示本场景不换人设。",
+        "default": ""
+      },
+      "persona_prompt": {
+        "description": "内联人设",
+        "type": "text",
+        "hint": "非空时优先于上面选的人设。填 off / 关闭 表示本场景不换人设。留空则用内置「闲聊伙伴」。",
+        "default": ""
+      },
+      "persona_label": {
+        "description": "人设显示名",
+        "type": "string",
+        "default": "闲聊伙伴"
+      }
+    }
+  },
+  "code": {
+    "description": "代码 / 技术场景",
+    "type": "object",
+    "items": {
+      "provider_id": {
+        "description": "对应的聊天模型",
+        "type": "string",
+        "_special": "select_provider",
+        "hint": "从 AstrBot 已经配好的 Provider 里选：官方接入和你自己添加的自定义 Provider 都会出现。不要在这里填 API Key 或模型 id。",
+        "default": ""
+      },
+      "aliases": {
+        "description": "场景别名",
+        "type": "text",
+        "default": "代码\n编程\n写代码\ncode"
+      },
+      "keywords": {
+        "description": "触发关键词",
+        "type": "text",
+        "default": "代码\n报错\n重构\n函数\n正则\n编译\n这段代码\n怎么写\ntraceback\nTypeError\nbug\npython\ntypescript\njavascript"
+      },
+      "wakeup_words": {
+        "description": "唤醒词（可整段删除）",
+        "type": "text",
+        "hint": "每行一个。匹配方式见「唤醒词匹配方式」。删空则本场景不靠唤醒词点名。",
+        "default": "代码助手\n编程助手"
+      },
+      "wakeup_match": {
+        "description": "本场景唤醒匹配",
+        "type": "string",
+        "options": [
+          "inherit",
+          "contains",
+          "exact",
+          "regex"
+        ],
+        "hint": "inherit 表示用全局设置。",
+        "default": "inherit"
+      },
+      "reasoning_effort": {
+        "description": "思考强度",
+        "type": "string",
+        "options": [
+          "provider",
+          "none",
+          "low",
+          "medium",
+          "high",
+          "max"
+        ],
+        "hint": "provider=不改写，沿用该 Provider 在 AstrBot 里的思考/请求头。只有打开「覆盖思考强度」时，none/low/medium/high/max 才会写入 reasoning_effort。",
+        "default": "provider"
+      },
+      "persona_id": {
+        "description": "使用 AstrBot 已有人设",
+        "type": "string",
+        "_special": "select_persona",
+        "hint": "本轮用该人设的系统提示。留空则用内联人设或内置默认。填 off 表示本场景不换人设。",
+        "default": ""
+      },
+      "persona_prompt": {
+        "description": "内联人设",
+        "type": "text",
+        "hint": "非空时优先于上面选的人设。填 off / 关闭 表示本场景不换人设。留空则用内置「编程助手」。",
+        "default": ""
+      },
+      "persona_label": {
+        "description": "人设显示名",
+        "type": "string",
+        "default": "编程助手"
+      }
+    }
+  },
+  "search": {
+    "description": "搜索 / 时事场景",
+    "type": "object",
+    "items": {
+      "provider_id": {
+        "description": "对应的聊天模型",
+        "type": "string",
+        "_special": "select_provider",
+        "hint": "从 AstrBot 已经配好的 Provider 里选：官方接入和你自己添加的自定义 Provider 都会出现。不要在这里填 API Key 或模型 id。",
+        "default": ""
+      },
+      "aliases": {
+        "description": "场景别名",
+        "type": "text",
+        "default": "搜索\n检索\nsearch"
+      },
+      "keywords": {
+        "description": "触发关键词",
+        "type": "text",
+        "default": "搜一下\n查一下\n搜索\n最新\n热点\n今天新闻\n联网\n现在的"
+      },
+      "wakeup_words": {
+        "description": "唤醒词（可整段删除）",
+        "type": "text",
+        "hint": "每行一个。匹配方式见「唤醒词匹配方式」。删空则本场景不靠唤醒词点名。",
+        "default": "搜索助手\n检索助手"
+      },
+      "wakeup_match": {
+        "description": "本场景唤醒匹配",
+        "type": "string",
+        "options": [
+          "inherit",
+          "contains",
+          "exact",
+          "regex"
+        ],
+        "hint": "inherit 表示用全局设置。",
+        "default": "inherit"
+      },
+      "reasoning_effort": {
+        "description": "思考强度",
+        "type": "string",
+        "options": [
+          "provider",
+          "none",
+          "low",
+          "medium",
+          "high",
+          "max"
+        ],
+        "default": "provider",
+        "hint": "provider=不改写，沿用该 Provider 在 AstrBot 里的思考/请求头。只有打开「覆盖思考强度」时，none/low/medium/high/max 才会写入 reasoning_effort。"
+      },
+      "persona_id": {
+        "description": "使用 AstrBot 已有人设",
+        "type": "string",
+        "_special": "select_persona",
+        "default": ""
+      },
+      "persona_prompt": {
+        "description": "内联人设",
+        "type": "text",
+        "hint": "留空则用内置「检索助手」。填 off 关闭本场景人设。",
+        "default": ""
+      },
+      "persona_label": {
+        "description": "人设显示名",
+        "type": "string",
+        "default": "检索助手"
+      }
+    }
+  },
+  "vision": {
+    "description": "看图 / 多模态场景",
+    "type": "object",
+    "hint": "带图片、文件、视频的消息默认走这里。",
+    "items": {
+      "provider_id": {
+        "description": "对应的聊天模型",
+        "type": "string",
+        "_special": "select_provider",
+        "hint": "从 AstrBot 已经配好的 Provider 里选：官方接入和你自己添加的自定义 Provider 都会出现。不要在这里填 API Key 或模型 id。",
+        "default": ""
+      },
+      "aliases": {
+        "description": "场景别名",
+        "type": "text",
+        "default": "看图\n识图\n多模态\nvision"
+      },
+      "keywords": {
+        "description": "触发关键词",
+        "type": "text",
+        "default": "看看这张\n这张图\n截图\n图片里\n识别图\nOCR"
+      },
+      "wakeup_words": {
+        "description": "唤醒词（可整段删除）",
+        "type": "text",
+        "hint": "每行一个。匹配方式见「唤醒词匹配方式」。删空则本场景不靠唤醒词点名。",
+        "default": "看图助手\n识图助手"
+      },
+      "wakeup_match": {
+        "description": "本场景唤醒匹配",
+        "type": "string",
+        "options": [
+          "inherit",
+          "contains",
+          "exact",
+          "regex"
+        ],
+        "hint": "inherit 表示用全局设置。",
+        "default": "inherit"
+      },
+      "reasoning_effort": {
+        "description": "思考强度",
+        "type": "string",
+        "options": [
+          "provider",
+          "none",
+          "low",
+          "medium",
+          "high",
+          "max"
+        ],
+        "default": "provider",
+        "hint": "provider=不改写，沿用该 Provider 在 AstrBot 里的思考/请求头。只有打开「覆盖思考强度」时，none/low/medium/high/max 才会写入 reasoning_effort。"
+      },
+      "persona_id": {
+        "description": "使用 AstrBot 已有人设",
+        "type": "string",
+        "_special": "select_persona",
+        "default": ""
+      },
+      "persona_prompt": {
+        "description": "内联人设",
+        "type": "text",
+        "hint": "留空则用内置「看图助手」。填 off 关闭本场景人设。",
+        "default": ""
+      },
+      "persona_label": {
+        "description": "人设显示名",
+        "type": "string",
+        "default": "看图助手"
+      }
+    }
+  },
+  "translate": {
+    "description": "翻译场景",
+    "type": "object",
+    "hint": "英译中、中译英、译成其他语言。Provider 留空表示禁用。",
+    "items": {
+      "provider_id": {
+        "description": "对应的聊天模型",
+        "type": "string",
+        "_special": "select_provider",
+        "hint": "从 AstrBot 已经配好的 Provider 里选：官方接入和你自己添加的自定义 Provider 都会出现。不要在这里填 API Key 或模型 id。",
+        "default": ""
+      },
+      "aliases": {
+        "description": "场景别名",
+        "type": "text",
+        "default": "翻译\ntranslate\n译"
+      },
+      "keywords": {
+        "description": "触发关键词",
+        "type": "text",
+        "default": "翻译成\n翻译为\n请翻译\n帮我翻译\n译成\n英译中\n中译英\n英文版"
+      },
+      "wakeup_words": {
+        "description": "唤醒词（可整段删除）",
+        "type": "text",
+        "hint": "每行一个。匹配方式见「唤醒词匹配方式」。删空则本场景不靠唤醒词点名。",
+        "default": "翻译助手"
+      },
+      "wakeup_match": {
+        "description": "本场景唤醒匹配",
+        "type": "string",
+        "options": [
+          "inherit",
+          "contains",
+          "exact",
+          "regex"
+        ],
+        "hint": "inherit 表示用全局设置。",
+        "default": "inherit"
+      },
+      "reasoning_effort": {
+        "description": "思考强度",
+        "type": "string",
+        "options": [
+          "provider",
+          "none",
+          "low",
+          "medium",
+          "high",
+          "max"
+        ],
+        "default": "provider",
+        "hint": "provider=不改写，沿用该 Provider 在 AstrBot 里的思考/请求头。只有打开「覆盖思考强度」时，none/low/medium/high/max 才会写入 reasoning_effort。"
+      },
+      "persona_id": {
+        "description": "使用 AstrBot 已有人设",
+        "type": "string",
+        "_special": "select_persona",
+        "default": ""
+      },
+      "persona_prompt": {
+        "description": "内联人设",
+        "type": "text",
+        "hint": "留空则用内置「翻译」。填 off 关闭本场景人设。",
+        "default": ""
+      },
+      "persona_label": {
+        "description": "人设显示名",
+        "type": "string",
+        "default": "翻译"
+      }
+    }
+  },
+  "write": {
+    "description": "写作 / 润色场景",
+    "type": "object",
+    "hint": "润色、改写、文案、作文。和「写代码」不是同一场景。",
+    "items": {
+      "provider_id": {
+        "description": "对应的聊天模型",
+        "type": "string",
+        "_special": "select_provider",
+        "hint": "从 AstrBot 已经配好的 Provider 里选：官方接入和你自己添加的自定义 Provider 都会出现。不要在这里填 API Key 或模型 id。",
+        "default": ""
+      },
+      "aliases": {
+        "description": "场景别名",
+        "type": "text",
+        "default": "写作\n润色\n文案\nwrite"
+      },
+      "keywords": {
+        "description": "触发关键词",
+        "type": "text",
+        "default": "润色\n改写成\n扩写\n缩写\n写一篇\n小红书\n朋友圈文案\n作文\n文案"
+      },
+      "wakeup_words": {
+        "description": "唤醒词（可整段删除）",
+        "type": "text",
+        "hint": "每行一个。匹配方式见「唤醒词匹配方式」。删空则本场景不靠唤醒词点名。",
+        "default": "写作助手\n润色助手"
+      },
+      "wakeup_match": {
+        "description": "本场景唤醒匹配",
+        "type": "string",
+        "options": [
+          "inherit",
+          "contains",
+          "exact",
+          "regex"
+        ],
+        "hint": "inherit 表示用全局设置。",
+        "default": "inherit"
+      },
+      "reasoning_effort": {
+        "description": "思考强度",
+        "type": "string",
+        "options": [
+          "provider",
+          "none",
+          "low",
+          "medium",
+          "high",
+          "max"
+        ],
+        "default": "provider",
+        "hint": "provider=不改写，沿用该 Provider 在 AstrBot 里的思考/请求头。只有打开「覆盖思考强度」时，none/low/medium/high/max 才会写入 reasoning_effort。"
+      },
+      "persona_id": {
+        "description": "使用 AstrBot 已有人设",
+        "type": "string",
+        "_special": "select_persona",
+        "default": ""
+      },
+      "persona_prompt": {
+        "description": "内联人设",
+        "type": "text",
+        "hint": "留空则用内置「写作编辑」。填 off 关闭本场景人设。",
+        "default": ""
+      },
+      "persona_label": {
+        "description": "人设显示名",
+        "type": "string",
+        "default": "写作编辑"
+      }
+    }
+  },
+  "route_media_to_vision": {
+    "description": "图片 / 文件 / 视频默认走看图场景",
+    "type": "bool",
+    "default": true
+  },
+  "route_links_to_search": {
+    "description": "带链接的消息倾向走搜索场景",
+    "type": "bool",
+    "default": false
+  },
+  "custom_scenes": {
+    "description": "额外场景",
+    "type": "list",
+    "hint": "在六个内置场景之外再加场景。id 不要和 chat/code/search/vision/translate/write 冲突；冲突时以这里为准。",
+    "default": [],
+    "items": {
+      "type": "object",
+      "items": {
+        "id": {
+          "description": "场景 ID",
+          "type": "string",
+          "hint": "英文小写，如 translate。",
+          "default": ""
+        },
+        "display_name": {
+          "description": "显示名",
+          "type": "string",
+          "default": ""
+        },
+        "provider_id": {
+          "description": "对应的聊天模型",
+          "type": "string",
+          "_special": "select_provider",
+          "hint": "从 AstrBot 已经配好的 Provider 里选：官方接入和你自己添加的自定义 Provider 都会出现。不要在这里填 API Key 或模型 id。",
+          "default": ""
+        },
+        "aliases": {
+          "description": "场景别名",
+          "type": "text",
+          "default": ""
+        },
+        "keywords": {
+          "description": "触发关键词",
+          "type": "text",
+          "default": ""
+        },
+        "wakeup_words": {
+          "description": "唤醒词（可整段删除）",
+          "type": "text",
+          "hint": "自定义场景的唤醒词，可整段删除。",
+          "default": ""
+        },
+        "wakeup_match": {
+          "description": "本场景唤醒匹配",
+          "type": "string",
+          "options": [
+            "inherit",
+            "contains",
+            "exact",
+            "regex"
+          ],
+          "hint": "inherit 表示用全局设置。",
+          "default": "inherit"
+        },
+        "reasoning_effort": {
+          "description": "思考强度",
+          "type": "string",
+          "options": [
+            "provider",
+            "none",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ],
+          "default": "provider",
+          "hint": "provider=不改写，沿用该 Provider 在 AstrBot 里的思考/请求头。只有打开「覆盖思考强度」时，none/low/medium/high/max 才会写入 reasoning_effort。"
+        },
+        "persona_id": {
+          "description": "使用 AstrBot 已有人设",
+          "type": "string",
+          "_special": "select_persona",
+          "default": ""
+        },
+        "persona_prompt": {
+          "description": "内联人设",
+          "type": "text",
+          "hint": "自定义场景没有内置人设。留空且未选人设时本场景不换人设。",
+          "default": ""
+        },
+        "persona_label": {
+          "description": "人设显示名",
+          "type": "string",
+          "default": "场景人设"
+        },
+        "capabilities": {
+          "description": "能力说明（给审核 AI）",
+          "type": "text",
+          "default": ""
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,20 @@
+[project]
+name = "astrbot-plugin-scene-switch"
+version = "1.15.0"
+description = "AstrBot plugin that switches LLM providers and personas by conversation scene or user request"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { file = "LICENSE" }
+authors = [{ name = "le" }]
+keywords = ["astrbot", "plugin", "llm", "routing", "persona"]
+classifiers = [
+    "License :: OSI Approved :: GNU Affero General Public License v3",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+addopts = "-q"

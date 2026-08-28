@@ -1,0 +1,26 @@
+[
+  {
+    "id": "longform",
+    "display_name": "长文助手",
+    "provider_id": "",
+    "aliases": "长文助手\n长文",
+    "wakeup_words": "长文助手",
+    "wakeup_match": "contains",
+    "keywords": "",
+    "reasoning_effort": "provider",
+    "persona_label": "长文助手",
+    "capabilities": "长上下文、中文写作、复杂推理"
+  },
+  {
+    "id": "research",
+    "display_name": "资料助手",
+    "provider_id": "",
+    "aliases": "资料助手\n资料",
+    "wakeup_words": "资料助手",
+    "wakeup_match": "contains",
+    "keywords": "",
+    "reasoning_effort": "provider",
+    "persona_label": "资料助手",
+    "capabilities": "长文档、搜索整理"
+  }
+]

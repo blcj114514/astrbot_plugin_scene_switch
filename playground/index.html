@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>场景模型切换 · 试玩</title>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --card: #171e27;
+      --line: #2a3542;
+      --text: #e8eef4;
+      --muted: #93a1b0;
+      --accent: #6ee7c5;
+      --warn: #fbbf24;
+      --chip: #22303d;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "IBM Plex Sans", "Noto Sans SC", sans-serif;
+      background: radial-gradient(1200px 500px at 10% -10%, #1b3a33 0%, var(--bg) 45%);
+      color: var(--text);
+      min-height: 100vh;
+    }
+    main {
+      max-width: 880px;
+      margin: 0 auto;
+      padding: 28px 18px 64px;
+    }
+    h1 { font-size: 1.55rem; margin: 0 0 8px; letter-spacing: .02em; }
+    .lead { color: var(--muted); margin: 0 0 10px; line-height: 1.6; }
+    .banner {
+      display: inline-block;
+      margin: 0 0 22px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: var(--chip);
+      color: var(--accent);
+      font-size: .88rem;
+    }
+    .banner.off { color: var(--warn); }
+    .map {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .map article {
+      background: #10161c;
+      border-radius: 12px;
+      padding: 10px 12px;
+      font-size: .88rem;
+      min-height: 88px;
+    }
+    .map .name { font-weight: 650; margin-bottom: 2px; }
+    .map .who { color: var(--accent); font-size: .86rem; }
+    .map .k { color: var(--muted); font-size: .75rem; word-break: break-all; }
+    .facts {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 8px 0 4px;
+    }
+    .facts span {
+      background: var(--chip);
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 4px 10px;
+      font-size: .8rem;
+      color: var(--muted);
+    }
+    .facts .on { color: var(--accent); }
+    details.raw {
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: .86rem;
+    }
+    .think-box {
+      margin-top: 10px;
+      padding: 10px 12px;
+      border-left: 3px solid var(--warn);
+      color: var(--muted);
+      font-size: .86rem;
+      line-height: 1.5;
+      white-space: pre-wrap;
+    }
+    .busy { color: var(--warn); }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 16px;
+      margin-bottom: 14px;
+    }
+    textarea {
+      width: 100%;
+      min-height: 92px;
+      resize: vertical;
+      background: #10161c;
+      color: var(--text);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 12px;
+      font: inherit;
+    }
+    .row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      margin-top: 12px;
+    }
+    label.chk, .field {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      color: var(--muted);
+      font-size: .92rem;
+    }
+    select, button {
+      font: inherit;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: var(--chip);
+      color: var(--text);
+      padding: 8px 14px;
+    }
+    button.primary {
+      background: var(--accent);
+      color: #06241c;
+      border-color: transparent;
+      font-weight: 650;
+      cursor: pointer;
+    }
+    button.ghost { cursor: pointer; }
+    button:disabled { opacity: .5; cursor: wait; }
+    .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+    .chips button {
+      background: transparent;
+      border-style: dashed;
+    }
+    .result h2 {
+      font-size: 1.05rem;
+      margin: 0 0 8px;
+      color: var(--accent);
+    }
+    .empty { color: var(--muted); }
+    .error { color: #fca5a5; }
+    pre {
+      margin: 10px 0 0;
+      padding: 12px;
+      background: #10161c;
+      border-radius: 12px;
+      overflow: auto;
+      font-size: .82rem;
+      line-height: 1.45;
+    }
+    .intro {
+      white-space: pre-wrap;
+      color: var(--muted);
+      line-height: 1.55;
+      font-size: .92rem;
+    }
+    .log { display: grid; gap: 8px; }
+    .log article {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 10px 12px;
+      font-size: .92rem;
+    }
+    .log .q { color: var(--text); }
+    .log .a { color: var(--accent); margin-top: 4px; }
+    @media (max-width: 640px) {
+      h1 { font-size: 1.28rem; }
+      main { padding: 18px 14px 48px; }
+      .map { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>场景模型切换 · 试玩</h1>
+    <p class="lead" id="lead">输入一句自然语言，看审判会把它分到哪个场景、切到哪类模型。</p>
+    <p class="banner" id="banner">正在检测 Ollama 连接…</p>
+    <script id="boot" type="application/json">{}</script>
+
+    <section class="card">
+      <textarea id="text" placeholder="例如：我需要你帮我写代码"></textarea>
+      <div class="row">
+        <label class="chk"><input type="checkbox" id="media" /> 带了图片</label>
+        <label class="chk"><input type="checkbox" id="group" /> 群聊</label>
+        <label class="field">审判
+          <select id="judge">
+            <option value="auto">自动</option>
+            <option value="code">强制判定为代码</option>
+            <option value="translate">强制判定为翻译</option>
+            <option value="write">强制判定为写作</option>
+            <option value="chat">强制判定为闲聊</option>
+            <option value="search">强制判定为搜索</option>
+            <option value="vision">强制判定为看图</option>
+            <option value="help">强制判定为功能介绍</option>
+            <option value="keep">审判放弃，走规则</option>
+          </select>
+        </label>
+        <label class="field">思考
+          <select id="effort">
+            <option value="">场景默认</option>
+            <option value="none">none 不思考</option>
+            <option value="low">low</option>
+            <option value="high">high</option>
+            <option value="max">max 拉满</option>
+          </select>
+        </label>
+        <button class="primary" id="send" type="button">看会切到哪</button>
+        <button class="ghost" id="reset" type="button">清空会话黏性</button>
+      </div>
+      <div class="row">
+        <label class="chk answer-box" id="answer-wrap">
+          <input type="checkbox" id="answer" />
+          让真实模型答一句（会调用对应场景模型，消耗用量）
+        </label>
+      </div>
+      <div class="row chips" id="examples"></div>
+    </section>
+
+    <section class="card" id="map-card">
+      <h2 style="margin:0 0 10px;font-size:1.05rem;">场景 → 模型 → 思考 → 人设</h2>
+      <p class="lead" style="margin:0 0 10px;font-size:0.9rem;">装进 AstrBot 后，切人设会覆盖官方会话人设和其它插件读到的人设栏目；其它插件的模型不会被改。</p>
+      <div class="map" id="map"></div>
+    </section>
+
+    <section class="card result" id="panel">
+      <p class="empty">还没有试过。先点上面的例句，或自己打一句。</p>
+    </section>
+
+    <section class="card">
+      <h2 style="margin:0 0 10px;font-size:1.05rem;">本轮记录</h2>
+      <div class="log" id="log"></div>
+    </section>
+  </main>
+  <script>
+    const examples = [
+      "我需要你帮我写代码",
+      "认真想想怎么写一个排序",
+      "别想了，把这段翻译成英文：你好",
+      "帮我润色一下这段文案",
+      "有哪些模型可以切换",
+      "用 deepseek 看这段报错",
+      "那怎么修",
+      "用 kimi 写一个 is_even",
+      "继续",
+    ];
+    function applyStatus(status) {
+      const live = Boolean(status && status.live);
+      const banner = document.getElementById("banner");
+      const lead = document.getElementById("lead");
+      const answer = document.getElementById("answer");
+        if (live) {
+        const judge = status.judge || "Ollama";
+        banner.classList.remove("off");
+        banner.textContent = "已接上 Ollama Cloud · 审判 " + judge + " · reasoning_effort=none";
+        lead.textContent =
+          "输入一句自然语言，看审判会把它分到哪个场景、切到哪类模型，并带上对应人设。场景模型用账号里的真实 id；勾选下方「让真实模型答一句」会再调用对应模型。";
+        if (answer) answer.disabled = false;
+        renderMap(status.scenes || {});
+      } else {
+        banner.classList.add("off");
+        banner.textContent = "离线试玩 · 本地启发式审判（未检测到 OLLAMA_API_KEY）";
+        lead.textContent =
+          "输入一句自然语言，看会切到哪个场景、用哪套人设。在仓库根目录放 .env 后重启 playground，就会用 Ollama 真实模型。";
+        if (answer) answer.disabled = true;
+        renderMap(status.scenes || {});
+      }
+    }
+    function renderMap(scenes) {
+      const box = document.getElementById("map");
+      const labels = { chat: "闲聊", code: "代码", search: "搜索", vision: "看图", translate: "翻译", write: "写作" };
+      const order = ["chat", "code", "search", "vision", "translate", "write"];
+      const ids = order.filter((id) => scenes && scenes[id]).concat(
+        Object.keys(scenes || {}).filter((id) => !order.includes(id))
+      );
+      if (!ids.length) {
+        box.innerHTML = '<p class="empty">还没有场景映射。</p>';
+        return;
+      }
+      box.innerHTML = ids.map((id) => {
+        const spec = scenes[id] || {};
+        const name = spec.display_name || labels[id] || id;
+        return `<article>
+          <div class="name">${escapeHtml(name)}</div>
+          <div class="who">${escapeHtml(spec.persona_label || "无人设")}</div>
+          <div class="k">${escapeHtml(spec.model || "")}</div>
+          <div class="k">think ${escapeHtml(spec.reasoning_effort || "none")}</div>
+        </article>`;
+      }).join("");
+    }
+    try {
+      applyStatus(JSON.parse(document.getElementById("boot").textContent || "{}"));
+    } catch (err) {
+      applyStatus({ live: false });
+    }
+    const box = document.getElementById("examples");
+    examples.forEach((item) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.textContent = item;
+      btn.addEventListener("click", () => {
+        document.getElementById("text").value = item;
+        run();
+      });
+      box.appendChild(btn);
+    });
+
+    async function run() {
+      const text = document.getElementById("text").value.trim();
+      const panel = document.getElementById("panel");
+      if (!text) {
+        panel.innerHTML = '<p class="empty">先输入一句话，或点例句。</p>';
+        return;
+      }
+      document.getElementById("send").disabled = true;
+      panel.innerHTML = '<p class="busy">正在审判 / 调用模型…</p>';
+      try {
+        const res = await fetch("/api/route", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            text,
+            media: document.getElementById("media").checked,
+            group: document.getElementById("group").checked,
+            judge: document.getElementById("judge").value,
+            answer: Boolean(document.getElementById("answer") && document.getElementById("answer").checked),
+            effort: document.getElementById("effort").value,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "请求失败");
+        const facts = data.applied
+          ? `<div class="facts">
+              <span class="on">${escapeHtml(data.label || "")}</span>
+              <span>人设 ${escapeHtml(data.persona_label || "无")}</span>
+              <span>think ${escapeHtml(data.reasoning_effort || "—")}</span>
+              <span>${data.scene_changed ? "刚切换" : "沿用场景"}</span>
+            </div>`
+          : "";
+        const intro = data.intro
+          ? `<div class="intro">${escapeHtml(data.intro)}</div>`
+          : "";
+        const thinking = data.answer && data.answer.reasoning
+          ? `<div class="think-box"><strong>思考</strong>（${escapeHtml(String(data.answer.reasoning_chars || data.answer.reasoning.length))} 字）\n${escapeHtml(data.answer.reasoning)}</div>`
+          : "";
+        const answer = data.answer && data.answer.content
+          ? `<p class="intro"><strong>模型回答</strong>（${escapeHtml(data.answer.model || "")} · ${escapeHtml(data.answer.reasoning_effort || "")}）</p><pre>${escapeHtml(data.answer.content)}</pre>`
+          : "";
+        const judgeNote = data.judge && data.judge.error
+          ? `<p class="error">审判调用失败，已改用本地启发式：${escapeHtml(data.judge.error)}</p>`
+          : "";
+        const raw = `<details class="raw"><summary>原始 JSON</summary><pre>${escapeHtml(JSON.stringify(data, null, 2))}</pre></details>`;
+        panel.innerHTML = `<h2>${escapeHtml(data.label || "已处理")}</h2>${facts}${judgeNote}${intro}${thinking}${answer}${raw}`;
+        const log = document.getElementById("log");
+        const article = document.createElement("article");
+        article.innerHTML = `<div class="q">${escapeHtml(text)}</div><div class="a">${escapeHtml(data.label || "")}</div>`;
+        log.prepend(article);
+      } catch (err) {
+        panel.innerHTML = `<p class="error">${escapeHtml(err.message || String(err))}</p>`;
+      } finally {
+        document.getElementById("send").disabled = false;
+      }
+    }
+
+    function escapeHtml(value) {
+      return String(value)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;");
+    }
+
+    document.getElementById("send").addEventListener("click", run);
+    document.getElementById("text").addEventListener("keydown", (event) => {
+      if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) run();
+    });
+    document.getElementById("reset").addEventListener("click", async () => {
+      await fetch("/api/reset", { method: "POST" });
+      document.getElementById("log").innerHTML = "";
+      document.getElementById("panel").innerHTML = '<p class="empty">会话黏性已清空。</p>';
+    });
+  </script>
+</body>
+</html>
