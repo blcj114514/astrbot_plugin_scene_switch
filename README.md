@@ -1,4 +1,4 @@
-# 场景模型切换 / Scene Switch
+# 多模型对话交互切换与管理 / Scene Switch
 
 AstrBot 插件：按**对话场景**或用户点名，在**本轮**切换 LLM Provider 和人设。不改会话默认模型，不在插件里保存 API Key。
 
