@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.15.2
+
+- New persistent decision log ("debug log"): when `decision_log_enabled` is on, the plugin appends one JSON line per routing decision, judge call (with latency), blocked event (blocklist / silence / slap / flood mute / queue wait), `/scene` command and session-think change to `plugin_data/.../decision_log/decisions-YYYYMMDD.jsonl`, with daily rotation and automatic retention sweep (`decision_log_days`, default 7).
+- Message text is never recorded by default; `decision_log_preview_chars` (default 0) optionally stores a truncated preview for debugging.
+- New admin-only commands: `/scene stats` (per-scene usage today/total, decision-source breakdown, judge count/latency, blocked counts) and `/scene log [n]` (last n decisions, default 10, max 50). Visible to AstrBot admins or `flood_admin_ids`.
+- Safe open-source defaults: logging off, preview off; log files are gitignored because they contain QQ ids.
+- Marketplace identity: version 1.15.2, plugin logo (`logo.png`) added to the repo root.
+
 ## v1.15.1
 
 - Main-chat thinking actually takes effect on OpenAI-compatible providers: AstrBot's `ProviderRequest` has no `reasoning_effort`, and the agent runner never copies a setattr on that request into `text_chat`. The plugin now wraps the current Provider so this turn's HTTP `extra_body.reasoning_effort` is set (still no native `think` / headers).

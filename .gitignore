@@ -26,3 +26,8 @@ tmp-pytest*/
 Cursor_outputtmp*/
 tests/_tmp_*.json
 tests/_tmp_main_hooks/
+
+# Decision logs contain QQ ids — never commit
+decision_log/
+plugin_data/
+*.jsonl

@@ -114,6 +114,9 @@ class PluginSettings:
     uncertain_route: str = "keep_default"
     announce_switch: str = "force_only"
     log_decisions: bool = True
+    decision_log_enabled: bool = False
+    decision_log_days: int = 7
+    decision_log_preview_chars: int = 0
     sticky_enabled: bool = True
     sticky_rounds: int = 3
     sticky_ttl_seconds: int = 600
@@ -375,6 +378,11 @@ def settings_from_dict(raw: dict | None) -> PluginSettings:
         uncertain_route=str(data.get("uncertain_route") or "keep_default"),
         announce_switch=str(data.get("announce_switch") or "force_only"),
         log_decisions=bool(data.get("log_decisions", True)),
+        decision_log_enabled=bool(data.get("decision_log_enabled", False)),
+        decision_log_days=_positive_int(data.get("decision_log_days"), 7),
+        decision_log_preview_chars=_nonneg_int(
+            data.get("decision_log_preview_chars"), 0
+        ),
         sticky_enabled=bool(data.get("sticky_enabled", True)),
         sticky_rounds=int(data.get("sticky_rounds") or 3),
         sticky_ttl_seconds=int(data.get("sticky_ttl_seconds") or 600),

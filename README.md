@@ -4,7 +4,7 @@ AstrBot 插件：按**对话场景**或用户点名，在**本轮**切换 LLM Pr
 
 An AstrBot plugin that routes each incoming LLM request to a scene-specific provider and persona. It never writes API keys, and it never calls `set_provider` to change the session default.
 
-当前版本 **v1.15.1** · 目标 AstrBot **≥ 4.10.4** · 许可证 **AGPL-3.0-only** · 作者 **le**
+当前版本 **v1.15.2** · 目标 AstrBot **≥ 4.10.4** · 许可证 **AGPL-3.0-only** · 作者 **le**
 
 ---
 

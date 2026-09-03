@@ -149,6 +149,7 @@ from astrbot.api import message_components as Comp  # noqa: E402
 from astrbot.api.provider import ProviderRequest  # noqa: E402
 
 import main as plugin_main  # noqa: E402
+from scene_switch.decision_log import format_entry  # noqa: E402
 
 
 class FakeContext:
@@ -231,37 +232,38 @@ class FakeEvent:
         return None
 
 
-def _plugin(slot: str) -> plugin_main.Main:
+def _plugin(slot: str, **config_extra) -> plugin_main.Main:
     folder = TMP / slot
     if folder.exists():
         shutil.rmtree(folder)
     folder.mkdir(parents=True)
-    plugin = plugin_main.Main(
-        FakeContext(),
-        {
-            "enabled": True,
-            "require_consent": True,
-            "honor_existing_selection": False,
-            "classifier_mode": "rules_only",
-            "flood_audit_enabled": True,
-            "flood_provider_id": "flood-l1",
-            "flood_verifier_provider_id": "",
-            "chat": {
-                "provider_id": "chat-p",
-                "aliases": "闲聊助手",
-                "persona_prompt": "off",
-            },
-            "code": {
-                "provider_id": "code-p",
-                "aliases": "代码助手",
-                "keywords": "代码\n报错",
-                "persona_prompt": "off",
-            },
+    config = {
+        "enabled": True,
+        "require_consent": True,
+        "honor_existing_selection": False,
+        "classifier_mode": "rules_only",
+        "flood_audit_enabled": True,
+        "flood_provider_id": "flood-l1",
+        "flood_verifier_provider_id": "",
+        "chat": {
+            "provider_id": "chat-p",
+            "aliases": "闲聊助手",
+            "persona_prompt": "off",
         },
-    )
+        "code": {
+            "provider_id": "code-p",
+            "aliases": "代码助手",
+            "keywords": "代码\n报错",
+            "persona_prompt": "off",
+        },
+    }
+    config.update(config_extra)
+    plugin = plugin_main.Main(FakeContext(), config)
     plugin.silence = plugin_main.SilenceStore(folder / "silence.json")
     plugin.flood = plugin_main.FloodStore(folder / "flood.json")
     plugin.store.persist_path = folder / "session_state.json"
+    plugin._dlog_dir = folder / "decision_log"
+    plugin._configure_dlog()
     return plugin
 
 
@@ -390,5 +392,88 @@ def test_llm_request_hook_applies_session_think_to_provider_extra_body():
         extra_after = {"reasoning_effort": "low"}
         provider._apply_provider_specific_request_overrides({}, extra_after)
         assert extra_after["reasoning_effort"] == "none"
+
+    asyncio.run(_run())
+
+
+def test_decision_log_disabled_writes_nothing():
+    plugin = _plugin("dlog-off")
+    event = FakeEvent("闭嘴", umo="g:dlog-off")
+
+    async def _run():
+        await _drain(plugin.silence_gate(event))
+
+    asyncio.run(_run())
+    folder = TMP / "dlog-off"
+    assert not (folder / "decision_log").exists()
+    assert plugin.dlog.snapshot()["enabled"] is False
+
+
+def test_decision_log_records_slap():
+    plugin = _plugin("dlog-slap", decision_log_enabled=True)
+    slap = FakeEvent("闭嘴", umo="g:dlog-slap")
+
+    async def _run():
+        await _drain(plugin.silence_gate(slap))
+
+    asyncio.run(_run())
+    snap = plugin.dlog.snapshot()
+    assert snap["enabled"] is True
+    assert snap["blocked_total"].get("slap") == 1
+    entries = plugin.dlog.tail(5)
+    assert entries and entries[0]["kind"] == "blocked"
+    assert entries[0]["blocked"] == "slap"
+    assert "原文" not in format_entry(entries[0])
+
+    # the same event must not be logged twice by the second gate
+    plugin._log_blocked(slap, "slap")
+    assert plugin.dlog.snapshot()["blocked_total"].get("slap") == 1
+
+
+def test_decision_log_preview_opt_in():
+    plugin = _plugin(
+        "dlog-preview",
+        decision_log_enabled=True,
+        decision_log_preview_chars=50,
+    )
+    event = FakeEvent("帮我写一段代码", umo="g:dlog-preview")
+
+    async def _run():
+        items = await _drain(plugin.switch_intent_gate(event))
+        assert items and "同意" in str(items[0])
+
+    asyncio.run(_run())
+    entries = [e for e in plugin.dlog.tail(5) if e["kind"] == "route"]
+    assert entries
+    assert entries[0]["preview"].startswith("帮我写一段代码")
+
+
+def test_decision_log_default_no_preview():
+    plugin = _plugin("dlog-nopreview", decision_log_enabled=True)
+    event = FakeEvent("帮我写一段代码", umo="g:dlog-nopreview")
+
+    async def _run():
+        items = await _drain(plugin.switch_intent_gate(event))
+        assert items and "同意" in str(items[0])
+
+    asyncio.run(_run())
+    entries = [e for e in plugin.dlog.tail(5) if e["kind"] == "route"]
+    assert entries
+    assert "preview" not in entries[0]
+
+
+def test_scene_stats_and_log_commands_admin_gated():
+    plugin = _plugin("dlog-stats", decision_log_enabled=True)
+
+    async def _run():
+        denied = FakeEvent("/scene stats", umo="g:dlog-stats", is_admin=False)
+        items = await _drain(plugin.scene_cmd(denied))
+        assert items and "管理员" in str(items[0])
+        allowed = FakeEvent("/scene stats", umo="g:dlog-stats", is_admin=True)
+        items = await _drain(plugin.scene_cmd(allowed))
+        assert items and "决策日志统计" in str(items[0])
+        log_view = FakeEvent("/scene log 5", umo="g:dlog-stats", is_admin=True)
+        items = await _drain(plugin.scene_cmd(log_view))
+        assert items and "决策日志暂无记录" in str(items[0])
 
     asyncio.run(_run())

@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import inspect
 import sys
+import time
 from pathlib import Path
 
 _PLUGIN_DIR = Path(__file__).resolve().parent
@@ -73,6 +74,7 @@ from scene_switch.silence import (
     silence_path_from_plugin_data,
 )
 from scene_switch.caption import should_caption
+from scene_switch.decision_log import DecisionLog, format_recent, format_stats
 from scene_switch.queue import WAIT_TEXT, MentionQueue
 from scene_switch.sanitize import chain_has_at, strip_model_mentions
 from scene_switch.state import SessionStore
@@ -89,7 +91,7 @@ from scene_switch.think import (
     "astrbot_plugin_scene_switch",
     "le",
     "按对话场景或用户点名，审核同意后切换本轮 LLM Provider 和人设",
-    "1.15.1",
+    "1.15.2",
 )
 class Main(Star):
     def __init__(self, context: Context, config: AstrBotConfig | None = None):
@@ -100,6 +102,8 @@ class Main(Star):
         self.router = SceneRouter(settings_from_dict(dict(self._raw_config)), self.store)
         self.mentions = MentionQueue()
         self.flood = FloodStore(_PLUGIN_DIR / ".data" / "flood.json")
+        self.dlog = DecisionLog()
+        self._dlog_dir: Path | None = None
         self._classifying_umos: set[str] = set()
         self._ensured_personas: dict[str, str] = {}
 
@@ -127,6 +131,8 @@ class Main(Star):
         self.store.persist_path = path
         self.silence = SilenceStore(silence_path_from_plugin_data(path.parent))
         self.flood = FloodStore(flood_path_from_plugin_data(path.parent))
+        self._dlog_dir = path.parent / "decision_log"
+        self._configure_dlog()
         loaded = self.store.load()
         self._bind_think_passthrough()
         logger.info(
@@ -139,7 +145,17 @@ class Main(Star):
     def _reload_settings(self) -> PluginSettings:
         settings = settings_from_dict(dict(self._raw_config))
         self.router.reload(settings)
+        self._configure_dlog()
         return settings
+
+    def _configure_dlog(self) -> None:
+        settings = self.router.settings
+        directory = self._dlog_dir or _PLUGIN_DIR / ".data" / "decision_log"
+        self.dlog.configure(
+            directory,
+            enabled=bool(settings.decision_log_enabled),
+            days=int(settings.decision_log_days or 7),
+        )
 
     @property
     def settings(self) -> PluginSettings:
@@ -318,7 +334,13 @@ class Main(Star):
             decision.persona_label,
         )
 
-    def _store_decision(self, event: AstrMessageEvent, decision: RouteDecision) -> None:
+    def _store_decision(
+        self,
+        event: AstrMessageEvent,
+        decision: RouteDecision,
+        *,
+        source_override: str | None = None,
+    ) -> None:
         event.set_extra(
             "scene_switch_decision",
             {
@@ -342,6 +364,57 @@ class Main(Star):
             event.set_extra("selected_provider", decision.provider_id)
         if decision.cleaned_prompt is not None:
             event.set_extra("scene_switch_cleaned_prompt", decision.cleaned_prompt)
+        self._log_route(event, decision, source_override=source_override)
+
+    def _log_route(
+        self,
+        event: AstrMessageEvent,
+        decision: RouteDecision,
+        *,
+        source_override: str | None = None,
+    ) -> None:
+        self.dlog.append(
+            "route",
+            umo=event.unified_msg_origin,
+            sender=self._sender_id(event),
+            scene=decision.scene_id,
+            provider=decision.provider_id,
+            source=source_override or decision.source,
+            reason=decision.reason,
+            effort=decision.reasoning_effort,
+            applied=decision.applied,
+            changed=decision.scene_changed,
+            preview=self._decision_preview(event.message_str),
+        )
+
+    def _decision_preview(self, text: str | None) -> str | None:
+        chars = int(self.settings.decision_log_preview_chars or 0)
+        if chars <= 0:
+            return None
+        cleaned = str(text or "").strip()
+        if not cleaned:
+            return None
+        return cleaned[:chars]
+
+    def _log_blocked(self, event: AstrMessageEvent, blocked: str, **extra) -> None:
+        if event.get_extra("scene_switch_dlog_blocked"):
+            return
+        event.set_extra("scene_switch_dlog_blocked", True)
+        self.dlog.append(
+            "blocked",
+            blocked=blocked,
+            umo=event.unified_msg_origin,
+            sender=self._sender_id(event),
+            **extra,
+        )
+
+    def _can_view_logs(self, event: AstrMessageEvent) -> bool:
+        try:
+            if event.is_admin():
+                return True
+        except Exception:
+            pass
+        return self._is_flood_admin(event)
 
     def _label(
         self,
@@ -544,6 +617,7 @@ class Main(Star):
         token = self._classifying_token(umo)
         timeout = max(1, int(self.settings.classifier_timeout_seconds or 12))
         self._classifying_umos.add(token)
+        started = time.perf_counter()
         try:
             try:
                 raw = await asyncio.wait_for(
@@ -561,9 +635,11 @@ class Main(Star):
                     "scene_switch judge timed out after %ss, falling back to heuristic",
                     timeout,
                 )
+                self._log_judge("timeout", None, started, timed_out=True)
                 return fallback_from_heuristic(text, scene_ids, "judge timeout")
             except Exception:
                 logger.exception("scene_switch judge failed")
+                self._log_judge("error", None, started, timed_out=False)
                 return fallback_from_heuristic(text, scene_ids, "judge call failed")
             if self.settings.log_decisions:
                 logger.info(
@@ -573,9 +649,26 @@ class Main(Star):
                     verdict.reason,
                     (verdict.raw or "")[:200],
                 )
+            self._log_judge(verdict.action, verdict.scene_id, started, timed_out=False)
             return verdict
         finally:
             self._classifying_umos.discard(token)
+
+    def _log_judge(
+        self,
+        action: str,
+        scene_id: str | None,
+        started: float,
+        *,
+        timed_out: bool,
+    ) -> None:
+        self.dlog.append(
+            "judge",
+            action=action,
+            scene=scene_id,
+            latency_ms=int((time.perf_counter() - started) * 1000),
+            timed_out=timed_out,
+        )
 
     async def _llm_text(
         self,
@@ -633,6 +726,7 @@ class Main(Star):
             return None
         if self._is_blocked_sender(event):
             logger.info("scene_switch drop blocked sender id=%s", self._sender_id(event))
+            self._log_blocked(event, "blocklist")
             self._block_default_llm(event)
             return "stop"
         umo = event.unified_msg_origin
@@ -644,6 +738,7 @@ class Main(Star):
                     self._sender_id(event),
                     umo,
                 )
+                self._log_blocked(event, "flood_lock")
                 self._block_default_llm(event)
                 return "stop"
             self.silence.unmute(umo)
@@ -652,11 +747,13 @@ class Main(Star):
             return None
         if self.silence.is_silenced(umo):
             logger.info("scene_switch silenced, drop umo=%s", umo)
+            self._log_blocked(event, "silence")
             self._block_default_llm(event)
             return "stop"
         if is_slap_command(text):
             self.silence.slap(umo, seconds=DEFAULT_SECONDS)
             logger.info("scene_switch slap umo=%s", umo)
+            self._log_blocked(event, "slap")
             self._block_default_llm(event)
             return "ack"
         return None
@@ -889,6 +986,7 @@ class Main(Star):
             locked,
             umo,
         )
+        self._log_blocked(event, "flood_lock" if locked else "flood_mute", count=count)
         self._block_default_llm(event)
         yield event.plain_result(notice)
         event.stop_event()
@@ -936,6 +1034,7 @@ class Main(Star):
             event.unified_msg_origin, self._sender_id(event)
         )
         if ticket.notice:
+            self._log_blocked(event, "queue_wait")
             try:
                 await event.send(event.plain_result(ticket.notice))
             except Exception:
@@ -966,12 +1065,14 @@ class Main(Star):
         if decision.help_requested:
             event.set_extra("scene_switch_handled", True)
             self._block_default_llm(event)
+            self._log_route(event, decision)
             yield event.plain_result(self._format_help(event))
             event.stop_event()
             return
         if decision.needs_consent and decision.consent_prompt:
             event.set_extra("scene_switch_handled", True)
             self._block_default_llm(event)
+            self._log_route(event, decision)
             yield event.plain_result(decision.consent_prompt)
             event.stop_event()
             return
@@ -982,6 +1083,7 @@ class Main(Star):
         ):
             event.set_extra("scene_switch_handled", True)
             self._block_default_llm(event)
+            self._log_route(event, decision)
             yield event.plain_result(decision.consent_prompt)
             event.stop_event()
             return
@@ -991,6 +1093,7 @@ class Main(Star):
         ):
             event.set_extra("scene_switch_handled", True)
             self._block_default_llm(event)
+            self._log_route(event, decision)
             yield event.plain_result(decision.consent_prompt)
             if decision.stop_for_switch_only:
                 event.stop_event()
@@ -1002,6 +1105,7 @@ class Main(Star):
         ):
             event.set_extra("scene_switch_handled", True)
             self._block_default_llm(event)
+            self._log_route(event, decision)
             yield event.plain_result(decision.consent_prompt)
             event.stop_event()
             return
@@ -1048,11 +1152,13 @@ class Main(Star):
         if decision is None:
             return
         if decision.help_requested:
+            self._log_route(event, decision)
             await event.send(event.plain_result(self._format_help(event)))
             event.stop_event()
             return
 
         if decision.needs_consent and decision.consent_prompt:
+            self._log_route(event, decision)
             await event.send(event.plain_result(decision.consent_prompt))
             event.stop_event()
             return
@@ -1061,17 +1167,20 @@ class Main(Star):
             and decision.consent_prompt
             and not decision.reasoning_effort
         ):
+            self._log_route(event, decision)
             await event.send(event.plain_result(decision.consent_prompt))
             event.stop_event()
             return
 
         if decision.source in {"blocked", "admin_required", "cooldown"} and decision.consent_prompt:
+            self._log_route(event, decision)
             await event.send(event.plain_result(decision.consent_prompt))
             if decision.stop_for_switch_only:
                 event.stop_event()
                 return
 
         if decision.source == "consent_denied" and decision.consent_prompt and not decision.applied:
+            self._log_route(event, decision)
             await event.send(event.plain_result(decision.consent_prompt))
             event.stop_event()
             return
@@ -1243,7 +1352,9 @@ class Main(Star):
             if not decision.applied:
                 yield event.plain_result(f"无法解析「{arg}」。用 /scene list 查看可用场景。")
                 return
-            self._store_decision(event, decision)
+            self._store_decision(
+                event, decision, source_override=f"command:{decision.source or 'use'}"
+            )
             await self._sync_decision_persona(event, decision)
             yield event.plain_result(confirm_switch(self.settings, decision))
             return
@@ -1259,7 +1370,9 @@ class Main(Star):
             if not decision.applied:
                 yield event.plain_result(f"无法锁定「{arg}」。{decision.reason}")
                 return
-            self._store_decision(event, decision)
+            self._store_decision(
+                event, decision, source_override=f"command:{decision.source or 'lock'}"
+            )
             await self._sync_decision_persona(event, decision)
             yield event.plain_result(
                 f"已锁定{self._label(decision.scene_id, decision.provider_id, decision.reasoning_effort, decision.persona_label)}。"
@@ -1271,6 +1384,12 @@ class Main(Star):
                 yield event.plain_result("解锁需要管理员权限。")
                 return
             self.router.unlock(umo, sender)
+            self.dlog.append(
+                "command",
+                source="command:auto",
+                umo=umo,
+                sender=sender,
+            )
             yield event.plain_result("已恢复自动场景切换。")
             return
         if action in {"think", "思考"}:
@@ -1286,6 +1405,7 @@ class Main(Star):
                 return
             if token in {"auto", "default", "默认", "provider"}:
                 self.store.clear_think(key)
+                self.dlog.append("think", action="clear", umo=umo, sender=sender)
                 yield event.plain_result("已恢复各 Provider 自己的思考设置。")
                 return
             effort = normalize_effort(token)
@@ -1296,11 +1416,28 @@ class Main(Star):
                 )
                 return
             self.store.set_think(key, effort, self.settings.think_ttl_seconds)
+            self.dlog.append("think", effort=effort, umo=umo, sender=sender)
             yield event.plain_result(
                 f"已将本会话思考强度设为 {effort}。"
                 "下一轮聊天会把 reasoning_effort 打进 OpenAI 兼容请求；"
                 "不写 Ollama 原生 think / 请求头。"
             )
+            return
+        if action in {"stats", "统计"}:
+            if not self._can_view_logs(event):
+                yield event.plain_result("查看决策统计需要管理员权限。")
+                return
+            yield event.plain_result(format_stats(self.dlog.snapshot()))
+            return
+        if action in {"log", "日志"}:
+            if not self._can_view_logs(event):
+                yield event.plain_result("查看决策日志需要管理员权限。")
+                return
+            try:
+                count = max(1, min(50, int(arg)))
+            except (TypeError, ValueError):
+                count = 10
+            yield event.plain_result(format_recent(self.dlog.tail(count)))
             return
         if action in {"status", "当前"}:
             yield event.plain_result(self._format_status(event))
@@ -1312,7 +1449,11 @@ class Main(Star):
             token = " ".join(parts)
             decision = self.router.use_now(umo, sender, token)
             if decision.applied:
-                self._store_decision(event, decision)
+                self._store_decision(
+                    event,
+                    decision,
+                    source_override=f"command:{decision.source or 'use'}",
+                )
                 await self._sync_decision_persona(event, decision)
                 yield event.plain_result(confirm_switch(self.settings, decision))
                 return

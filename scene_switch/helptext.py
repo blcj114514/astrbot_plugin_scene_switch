@@ -112,6 +112,8 @@ def build_feature_intro(
             "/scene use 代码 — 点名切换",
             "/scene lock 闲聊 — 锁定",
             "/scene auto — 恢复自动",
+            "/scene stats — 决策统计（管理员，需开启决策日志）",
+            "/scene log 10 — 最近决策日志（管理员，需开启决策日志）",
             think_cmd,
         ]
     )

@@ -187,6 +187,24 @@
     "type": "bool",
     "default": true
   },
+  "decision_log_enabled": {
+    "description": "记录路由决策日志",
+    "type": "bool",
+    "hint": "开启后在插件数据目录按天写入 decisions-*.jsonl（含会话与发送者 id，默认不含消息原文）。用 /scene stats、/scene log 查看，仅管理员可用。日志文件不要提交进 git。",
+    "default": false
+  },
+  "decision_log_days": {
+    "description": "决策日志保留天数",
+    "type": "int",
+    "hint": "超过该天数的日志文件会在下次写入时自动清理，最小 1。",
+    "default": 7
+  },
+  "decision_log_preview_chars": {
+    "description": "日志记录消息原文预览字数",
+    "type": "int",
+    "hint": "默认 0：完全不记消息内容。设为 30～50 可在排错时看到原文片段；群聊内容敏感，请自行权衡。",
+    "default": 0
+  },
   "sticky_enabled": {
     "description": "点名切换后短时黏住",
     "type": "bool",
