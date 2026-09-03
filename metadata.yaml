@@ -2,7 +2,7 @@ name: astrbot_plugin_scene_switch
 display_name: 多模型对话交互切换与管理
 short_desc: 按对话场景或点名切换本轮 LLM 与人设，默认征求同意。
 desc: 按场景或点名切换本轮 LLM 与人设。默认征求同意；不保存 API Key。插件问题或 bug 请用 QQ 1844372102 联系（只谈这个插件，请勿闲聊加好友）。
-version: v1.15.1
+version: 1.15.1
 author: le
 repo: https://github.com/blcj114514/astrbot_plugin_scene_switch
 astrbot_version: ">=4.10.4"
