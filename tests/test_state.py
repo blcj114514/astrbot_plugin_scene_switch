@@ -66,3 +66,31 @@ def test_concurrent_writes_keep_both_keys(tmp_path: Path):
     assert sticky_b is not None and sticky_b.scene_id == "code"
     assert restored.last_scene("umo::a") == "chat"
     assert restored.last_scene("umo::b") == "code"
+
+
+def test_load_survives_corrupt_values(tmp_path: Path):
+    path = tmp_path / "session_state.json"
+    path.write_text(
+        json.dumps(
+            {
+                "cooldown_until": {"k1": "abc", "k2": {"x": 1}},
+                "last_prompt_at": {"k1": None},
+                "last_scene": {"k1": "chat"},
+                "sticky": {
+                    "k1": {
+                        "scene_id": "chat",
+                        "provider_id": "p",
+                        "expires_at": "oops",
+                        "rounds_left": "bad",
+                    }
+                },
+                "think": {"k1": {"effort": "high", "expires_at": "oops"}},
+                "pending": {"k1": {"scene_id": "c", "provider_id": "p", "expires_at": []}},
+            }
+        ),
+        encoding="utf-8",
+    )
+    store = SessionStore(persist_path=path)
+    assert store.last_scene("k1") == "chat"
+    assert store.get_sticky("k1") is None
+    assert store.get_think("k1") is None
