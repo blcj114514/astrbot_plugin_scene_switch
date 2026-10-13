@@ -226,6 +226,18 @@ class SessionStore:
             if isinstance(value, (list, tuple)) and len(value) >= 2:
                 locks[str(key)] = (str(value[0]), str(value[1]))
 
+        def _num(value, default: float = 0.0) -> float:
+            try:
+                return float(value)
+            except (TypeError, ValueError):
+                return default
+
+        def _int(value, default: int = 0) -> int:
+            try:
+                return int(float(value))
+            except (TypeError, ValueError):
+                return default
+
         sticky: dict[str, StickySlot] = {}
         now = time.time()
         for key, value in (data.get("sticky") or {}).items():
@@ -234,8 +246,8 @@ class SessionStore:
             slot = StickySlot(
                 scene_id=str(value.get("scene_id") or ""),
                 provider_id=str(value.get("provider_id") or ""),
-                rounds_left=int(value.get("rounds_left") or 0),
-                expires_at=float(value.get("expires_at") or 0),
+                rounds_left=_int(value.get("rounds_left")),
+                expires_at=_num(value.get("expires_at")),
                 source=str(value.get("source") or "force"),
             )
             if slot.scene_id and slot.provider_id and slot.rounds_left > 0 and slot.expires_at > now:
@@ -251,10 +263,10 @@ class SessionStore:
         for key, value in (data.get("think") or {}).items():
             if isinstance(value, dict):
                 effort = str(value.get("effort") or "")
-                expires_at = float(value.get("expires_at") or 0)
+                expires_at = _num(value.get("expires_at"))
             elif isinstance(value, (list, tuple)) and len(value) >= 2:
                 effort = str(value[0])
-                expires_at = float(value[1])
+                expires_at = _num(value[1])
             else:
                 continue
             if effort and expires_at > now:
@@ -271,21 +283,21 @@ class SessionStore:
                 reason=str(value.get("reason") or ""),
                 persona_id=str(value.get("persona_id") or ""),
                 persona_label=str(value.get("persona_label") or ""),
-                created_at=float(value.get("created_at") or 0),
-                expires_at=float(value.get("expires_at") or 0),
+                created_at=_num(value.get("created_at")),
+                expires_at=_num(value.get("expires_at")),
             )
             if item.scene_id and item.provider_id and item.expires_at > now:
                 pending[str(key)] = item
 
         cooldown = {
-            str(key): float(value)
+            str(key): _num(value)
             for key, value in (data.get("cooldown_until") or {}).items()
-            if float(value or 0) > now
+            if _num(value) > now
         }
         last_prompt = {
-            str(key): float(value)
+            str(key): _num(value)
             for key, value in (data.get("last_prompt_at") or {}).items()
-            if float(value or 0) > now - 86400
+            if _num(value) > now - 86400
         }
         with self._lock:
             self._locks = locks

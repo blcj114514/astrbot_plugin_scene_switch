@@ -119,7 +119,6 @@ class SilenceStore:
         if not isinstance(raw, dict):
             self._until = {}
             return
-        now = time.time()
         out: dict[str, float] = {}
         for key, value in raw.items():
             try:
